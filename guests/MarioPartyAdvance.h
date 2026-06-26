@@ -34,6 +34,7 @@ private:
   DrRetro *m_retro = nullptr;
   bool m_gameStarted = false;
   unsigned m_winners = 0;
+  unsigned m_EndWaitFrames = 0;
 };
 
 #endif

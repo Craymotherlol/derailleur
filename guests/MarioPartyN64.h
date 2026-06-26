@@ -34,6 +34,7 @@ class MarioPartyN64 : public DrGuest
 
 public:
   MarioPartyN64(const MpN64Config &config, QObject *parent = nullptr);
+  ~MarioPartyN64() override;
 
   QRetro *core() const override { return m_retro ? m_retro->core() : nullptr; }
   void startCore() override;
