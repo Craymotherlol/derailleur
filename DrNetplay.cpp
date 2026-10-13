@@ -786,7 +786,7 @@ void DrNetplay::commitMergedFrame(int context, quint64 frame)
     DrNetplayPacket p = fi.pkts[i];
     if (i >= m_PeerCount || !fi.have[i])
       p = DrNetplayPacket{ frame, static_cast<uint8_t>(i), static_cast<uint8_t>(context), 0, 0, 0,
-        0, 0, 0, 0 };
+        0, 0, 0, 0, {}, 0 };
     applyPacketToJoypad(p, m_CommitPads[i]);
   }
 
