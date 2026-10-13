@@ -92,6 +92,8 @@ private:
    * own, but the team rule redirects it to the team leader's. */
   size_t record(size_t ctx, unsigned slot);
 
+  void applyPendingLoss(void);
+
 
   std::array<DrMinigameCandidate, 5> m_candidates = {};
 
@@ -115,6 +117,9 @@ private:
   /* Whether the board handed off to a results scene (end of turn) rather than
    * straight back to itself (duel space). */
   bool m_toResults = true;
+
+  int m_pendingLoss[4] = { 0, 0, 0, 0 };
+  unsigned m_pendingLossFrames = 0;
 
 };
 

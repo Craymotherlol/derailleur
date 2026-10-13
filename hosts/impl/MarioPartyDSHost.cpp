@@ -117,6 +117,9 @@ static const dr_value_t MPDS_SCENE_RETURN = { 0x020C1C2E - MPDS_RAM_BASE, DR_VAL
 #define MPDS_SCENE_RESULTS 0x2a
 #define MPDS_SCENE_BATTLE_RESULTS 0x2b
 
+/* Number of frames before running the negative results fix hack */
+#define MPDS_PENDING_LOSS_FRAMES 120
+
 static const size_t MPDS_HOST_STATE_ADDR = MPDS_HOST_STATE - MPDS_RAM_BASE;
 static const size_t MPDS_TITLE_BLOCK_ADDR = MPDS_TITLE_BLOCK - MPDS_RAM_BASE;
 static const size_t MPDS_COLOUR_BLOCK_ADDR = MPDS_COLOUR_BLOCK - MPDS_RAM_BASE;
@@ -1025,6 +1028,15 @@ void MarioPartyDSHost::run(void)
   const int previousScene = m_lastScene;
   const int currentScene = pollScene();
 
+  /* Apply the negative results hack */
+  if (m_pendingLoss[0] || m_pendingLoss[1] || m_pendingLoss[2] || m_pendingLoss[3])
+  {
+    if (currentScene == MPDS_SCENE_RESULTS)
+      m_pendingLossFrames++;
+    if (m_pendingLossFrames >= MPDS_PENDING_LOSS_FRAMES)
+      applyPendingLoss();
+  }
+
   switch (m_state)
   {
   case DR_MPDS_HOST_STATE_INVALID:
@@ -1174,8 +1186,16 @@ void MarioPartyDSHost::writeResults(DrGuest *guest)
     uint32_t flags = 0;
 
     /* MPDS has only one results variable; add result + bonus together */
-    const int payout =
+    int payout =
       m_minigameType == DR_MINIGAME_BATTLE ? result.coins : result.coins + result.bonus_coins;
+
+    /* Flag negative results to fix later */
+    m_pendingLoss[i] = 0;
+    if (m_toResults && payout < 0)
+    {
+      m_pendingLoss[i] = -payout;
+      payout = 0;
+    }
 
     m_retro->writes16(static_cast<int16_t>(payout), rec + MPDS_PL_MG_RESULT);
 
@@ -1183,12 +1203,42 @@ void MarioPartyDSHost::writeResults(DrGuest *guest)
     log(
       DR_LOG_INFO, qPrintable(resultLogLine(i, MPDS_CHARACTERS[MPDS_PL_CHARACTER(flags)], result)));
   }
+
+  m_pendingLossFrames = 0;
+}
+
+/** @todo HACK! Manually remove coins representing a negative minigame result */
+void MarioPartyDSHost::applyPendingLoss(void)
+{
+  const size_t ctx = context();
+  unsigned i;
+
+  for (i = 0; ctx && i < 4; i++)
+  {
+    const size_t rec = record(ctx, i);
+    int16_t coins = 0;
+
+    if (!m_pendingLoss[i] || !rec)
+      continue;
+
+    m_retro->reads16(&coins, rec + MPDS_PL_COINS);
+    coins = coins > m_pendingLoss[i] ? static_cast<int16_t>(coins - m_pendingLoss[i]) : 0;
+    m_retro->writes16(coins, rec + MPDS_PL_COINS);
+    log(DR_LOG_INFO, qPrintable(QString("slot %1: NEGATIVE HACK took %2 coins after results, now %3")
+                                  .arg(i + 1).arg(m_pendingLoss[i]).arg(coins)));
+  }
+
+  memset(m_pendingLoss, 0, sizeof(m_pendingLoss));
+  m_pendingLossFrames = 0;
 }
 
 void MarioPartyDSHost::clearResults(void)
 {
   const size_t ctx = context();
   unsigned i;
+
+  memset(m_pendingLoss, 0, sizeof(m_pendingLoss));
+  m_pendingLossFrames = 0;
 
   if (!ctx)
     return;
