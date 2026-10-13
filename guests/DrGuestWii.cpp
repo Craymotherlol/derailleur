@@ -1,8 +1,40 @@
-#include "DolphinGuest.h"
+#include "DrGuestWii.h"
 
 #include <QRetro.h>
 
-void DolphinGuest::applyControlRemap(dr_emulation_quirk_t quirks, const dr_player_t players[4])
+DrGuestWii::DrGuestWii(const QString &subdir, const std::string &disc, QObject *parent)
+  : DrGuestDolphin(new DrRetroWii(subdir), disc, true, parent)
+{
+  /* Select the controller type on every port before the first frame */
+  connect(core(), &QRetro::onCoreStart, this, [this]() {
+    const char *desc = DrRetroWii::controllerDesc(m_controllerType);
+    QRetro *c = core();
+    unsigned port;
+
+    if (!desc)
+      return;
+
+    const std::vector<QRetroControllerPort> &ports = c->input()->controllerPorts();
+    for (port = 0; port < 4 && port < ports.size(); port++)
+    {
+      bool found = false;
+
+      for (const QRetroControllerType &type : ports[port].types)
+      {
+        if (type.desc == desc)
+        {
+          c->input()->setSelectedControllerType(port, type.id);
+          found = true;
+          break;
+        }
+      }
+      log(found ? DR_LOG_INFO : DR_LOG_WARN, qPrintable(QString("port %1 controller: %2%3")
+        .arg(port + 1).arg(desc).arg(found ? "" : " (not offered by the core)")));
+    }
+  }, Qt::DirectConnection);
+}
+
+void DrGuestWii::applyControlRemap(dr_emulation_quirk_t quirks, const dr_player_t players[4])
 {
   QRetro *retro = core();
   if (!retro || !retro->input())
@@ -21,7 +53,7 @@ void DolphinGuest::applyControlRemap(dr_emulation_quirk_t quirks, const dr_playe
   {
     /* In-game slot from the controller port (Mario Party assigns ports
      * non-linearly), falling back to the board index if out of range. */
-    unsigned slot = static_cast<unsigned>(players[i].control_port - DR_CONTROL_PORT_P1);
+    unsigned slot = players[i].control_port;
     if (slot >= 4)
       slot = i;
     const bool isSolo = players[i].team_type == DR_TEAM_TYPE_1V3_SOLO;
@@ -32,7 +64,7 @@ void DolphinGuest::applyControlRemap(dr_emulation_quirk_t quirks, const dr_playe
   }
 }
 
-void DolphinGuest::applyControlProfile(dr_wii_control control)
+void DrGuestWii::applyControlProfile(dr_wii_control control)
 {
   QRetro *retro = core();
   if (!retro || !retro->input())
