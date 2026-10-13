@@ -7,6 +7,7 @@
 #include <QString>
 
 class QLabel;
+class QRetro;
 class QPlainTextEdit;
 class QProgressBar;
 
@@ -19,6 +20,17 @@ public:
 
   /// Whether `message` carries one of the noise triggers and should be dropped.
   static bool isNoise(const QString &message);
+
+  /// Routes `source`'s logMessage(unsigned, QString) signal into the log.
+  template <typename T>
+  void attach(T *source, Qt::ConnectionType type = Qt::QueuedConnection)
+  {
+    if (source)
+      connect(source, &T::logMessage, this, &DrLogger::message, type);
+  }
+
+  /// Routes a libretro core's log and on-screen messages into the log.
+  void attachCore(QRetro *core);
 
 public slots:
   void message(unsigned level, const QString &message);

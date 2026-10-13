@@ -5,6 +5,8 @@
 #include <QLabel>
 #include <QPlainTextEdit>
 #include <QProgressBar>
+#include <QRetro.h>
+#include <memory>
 #include <QVBoxLayout>
 
 DrLogger::DrLogger(QWidget *parent)
@@ -104,4 +106,52 @@ void DrLogger::message(unsigned level, const QString &message)
     m_file.write((line + '\n').toUtf8());
     m_file.flush();
   }
+}
+
+static unsigned dr_retro_log_level(int retro_level)
+{
+  return retro_level >= RETRO_LOG_ERROR ? DR_LOG_ERROR
+       : retro_level == RETRO_LOG_WARN  ? DR_LOG_WARN
+                                        : DR_LOG_INFO;
+}
+
+void DrLogger::attachCore(QRetro *core)
+{
+  if (!core)
+    return;
+
+  qRegisterMetaType<QRetroMessageEntry>();
+
+  /* Collapses repeated lines on the emulation thread */
+  auto lastMsg = std::make_shared<QString>();
+  auto repeats = std::make_shared<int>(0);
+  connect(core, &QRetro::onCoreLog, this,
+    [this, lastMsg, repeats](int level, const QString &msg) {
+      if (isNoise(msg))
+        return;
+      if (msg == *lastMsg)
+      {
+        ++*repeats;
+        return;
+      }
+      const int skipped = *repeats;
+      const unsigned lvl = dr_retro_log_level(level);
+
+      *repeats = 0;
+      *lastMsg = msg;
+      QMetaObject::invokeMethod(this,
+        [this, lvl, msg, skipped]() {
+          if (skipped > 0)
+            message(DR_LOG_INFO, QStringLiteral("[core] (previous line repeated %1x)").arg(skipped));
+          message(lvl, QStringLiteral("[core] ") + msg);
+        },
+        Qt::QueuedConnection);
+    },
+    Qt::DirectConnection);
+
+  connect(core, &QRetro::onCoreMessage, this,
+    [this](const QRetroMessageEntry &entry) {
+      message(dr_retro_log_level(entry.level), QStringLiteral("[msg] ") + entry.message);
+    },
+    Qt::QueuedConnection);
 }
