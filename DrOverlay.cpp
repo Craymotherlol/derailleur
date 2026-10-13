@@ -13,6 +13,8 @@
  * it on screen. The frozen-frame background still shows immediately. */
 #define DR_OVERLAY_ICON_DELAY_MS 400
 
+#define DR_OVERLAY_SPRITE_COUNT 1
+
 DrOverlay::DrOverlay(QWidget *parent)
   : QWidget(parent)
 {
@@ -176,8 +178,6 @@ void DrOverlay::fadeOut(int durationMs)
   m_anim->start(QAbstractAnimation::DeleteWhenStopped);
   m_anim = nullptr;
 }
-
-#define DR_OVERLAY_SPRITE_COUNT 44
 
 void DrOverlay::pickRandomSprite()
 {
