@@ -235,9 +235,9 @@ MarioGolf::MarioGolf(QObject *parent)
       const QByteArray label =
         QString("Golf: %1 %2").arg(courses[c].name).arg(hole + 1).toUtf8();
       qstrncpy(m_minigameNames[n], label.constData(), sizeof(m_minigameNames[n]));
-      m_minigames[n] = { m_minigameNames[n], DR_MINIGAME_4P, courses[c].id, hole, DR_NO_QUIRKS };
+      m_minigames[n] = { m_minigameNames[n], DR_MINIGAME_4P, courses[c].id, hole, DR_NO_QUIRKS, DR_NO_FLAGS };
     }
-  m_minigames[n] = { nullptr, DR_MINIGAME_INVALID, 0xFF, 0xFF, DR_NO_QUIRKS };
+  m_minigames[n] = { nullptr, DR_MINIGAME_INVALID, 0xFF, 0xFF, DR_NO_QUIRKS, DR_NO_FLAGS };
 }
 
 const dr_mp_minigame_t *MarioGolf::minigames() const
