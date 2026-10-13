@@ -1,23 +1,17 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
-#include <cstdlib>
+#include <functional>
 
-#ifdef _WIN32
-#include <windows.h>
-#endif
-
-#include <QCloseEvent>
 #include <QMainWindow>
-#include <QMetaObject>
 #include <QStackedWidget>
-#include <QTimer>
 
 #include "DrCommon.h"
 #include "DrChallenge.h"
 #include "DrDebug.h"
 #include "DrGuestList.h"
 #include "DrHost.h"
+#include "DrHostPicker.h"
 #include "DrInputStore.h"
 #include "DrLogger.h"
 #include "DrMinigameFilter.h"
@@ -27,6 +21,7 @@
 #include "DrToolWindow.h"
 
 class QRetro;
+struct DrHostEntry;
 
 class MainWindow : public QMainWindow
 {
@@ -34,95 +29,73 @@ class MainWindow : public QMainWindow
 
 public:
   MainWindow(QWidget *parent = nullptr);
-  ~MainWindow();
+
+protected:
+  void showEvent(QShowEvent *) override { trackOverlay(); }
+  void moveEvent(QMoveEvent *) override { trackOverlay(); }
+  void resizeEvent(QResizeEvent *) override { trackOverlay(); }
+  void closeEvent(QCloseEvent *e) override;
 
 private:
-  /// Routes a core's libretro log output (onCoreLog) into m_Logger. No-op if there
-  /// is no logger or core.
-  void connectCoreLog(QRetro *core);
-
-  void startWithHost(DrHost *host);
-
-  /// Builds the Mario Party host for `mp` (1-8). `game` overrides the stock ROM
-  /// path; empty uses it. Returns null for an unknown index.
-  DrHost *makeHost(int mp, const QString &game);
-  void showHost();
-  /// Returns to the host select screen, for runs with no host to go back to
-  /// (challenge mode, or a debug launch before a host was chosen).
-  void showChooser();
-  void showGuests();
-  /// Cancels the active mini-game locally and returns to the board. Shared by the
-  /// debug Cancel button and netplay cancels received from a peer.
-  void cancelActiveMinigame();
-  void warmupStep();
-  void launchMinigame(
-    DrGuest *guest, const dr_mp_minigame_t *minigame, const dr_player_t players[4]);
+  void setupStack();
+  void setupGuests();
+  void setupFilter();
+  void setupDebug();
+  void setupChallenge();
+  void setupSettings();
   void setupNetplay();
+
+  /// Builds the host for `entry` and starts it. `rom` overrides the stock
+  /// content; `customRom` is its basename when it is a custom ROM.
+  void startHost(const DrHostEntry *entry, const QString &rom, const QString &customRom);
+  void startWithHost(DrHost *host);
   void attachNetplay();
 
-  /// Freezes the game view into the loading overlay so a core swap happens behind
-  /// a still image. `core` is the core currently on screen, or null.
+  void launchMinigame(
+    DrGuest *guest, const dr_mp_minigame_t *minigame, const dr_player_t players[4]);
+  void onMinigameFinished();
+
+  /// Cancels the active mini-game locally and returns to the board.
+  void cancelActiveMinigame();
+
+  /// Returns to the board, or to the picker when there is no host.
+  void showBoard();
+  void showHost();
+  void showChooser();
+
+  /// Pauses every core, then runs `show` once the current frame has settled.
+  void switchView(std::function<void()> show);
+  void pauseGuests();
+
+  /// Freezes the game view into the loading overlay. `core` is the core on
+  /// screen, or null.
   void holdView(QRetro *core);
+  void fadeOverlay();
+  void trackOverlay();
 
-  /// Our seat/peer index in a netplay session (0 solo). Pushed into a host at
-  /// start so it can show our private per-player state.
+  /// The loading overlay, or null when the user has turned it off.
+  DrOverlay *overlay(void) { return dr_settings_get().loading_overlay ? m_Overlay : nullptr; }
+
   int m_NetplayPeerIndex = 0;
-
-  QMetaObject::Connection m_warmupConnection;
-  unsigned m_warmupFrameCount = 0;
-  QList<DrGuest *> m_warmupQueue; // guests with an allowed mini-game, warmed in order
-  int m_warmupIndex = 0;
+  QString m_CustomRom;
 
   DrGuestList *m_Guests = nullptr;
   DrHost *m_Host = nullptr;
   QWidget *m_HostContainer = nullptr;
-  QWidget *m_StartGameTab = nullptr; // host picker; disabled once a game starts
-  QString m_CustomRom;               // basename of the running custom host ROM, if any
+  QWidget *m_Blank = nullptr;
   QStackedWidget *m_Stack = nullptr;
+
+  DrToolWindow *m_Tools = nullptr;
   DrLogger *m_Logger = nullptr;
-  DrOverlay *m_Overlay = nullptr;
-  /// The loading overlay, or null when the user has turned it off (see DrSettings).
-  DrOverlay *overlay(void) { return dr_settings_get().loading_overlay ? m_Overlay : nullptr; }
+  DrHostPicker *m_Picker = nullptr;
+  DrMinigameFilter *m_Filter = nullptr;
   DrDebug *m_Debug = nullptr;
   DrChallenge *m_Challenge = nullptr;
-  DrMinigameFilter *m_Filter = nullptr;
+  DrOverlay *m_Overlay = nullptr;
+
   DrInputStore *m_InputStore = nullptr;
   DrNetplay *m_Netplay = nullptr;
   DrNetplayWidget *m_NetplayUi = nullptr;
-  DrToolWindow *m_Tools = nullptr;
-
-protected:
-  void showEvent(QShowEvent *) override
-  {
-    if (m_Overlay)
-      m_Overlay->trackGeometry(geometry());
-  }
-  void moveEvent(QMoveEvent *) override
-  {
-    if (m_Overlay)
-      m_Overlay->trackGeometry(geometry());
-  }
-  void resizeEvent(QResizeEvent *) override
-  {
-    if (m_Overlay)
-      m_Overlay->trackGeometry(geometry());
-  }
-  void closeEvent(QCloseEvent *e) override
-  {
-    // The tool pages are children of m_Tools, so closing it closes them all.
-    if (m_Tools)
-      m_Tools->close();
-    QMainWindow::closeEvent(e);
-    // The emulator cores run background threads (timing, SDL, libusb) that fire
-    // DirectConnection signals into our objects. Unwinding all of that during
-    // normal teardown races with object destruction and crashes (notably under
-    // Wine). There is no exit-time state to flush, so terminate immediately.
-#ifdef _WIN32
-    TerminateProcess(GetCurrentProcess(), 0);
-#else
-    std::_Exit(0);
-#endif
-  }
 };
 
 #endif

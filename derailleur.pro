@@ -56,52 +56,60 @@ SOURCES += \
     DrOverlay.cpp \
     DrToolWindow.cpp \
     DrGuestList.cpp \
+    DrHostPicker.cpp \
+    DrStartup.cpp \
     DrLogger.cpp \
     DrRetro.cpp \
+    DrRetroDolphin.cpp \
     QRetroInputBackendShared.cpp \
-    hosts/MarioPartyN64Host.cpp \
-    hosts/MarioParty1Host.cpp \
-    hosts/MarioParty2Host.cpp \
-    hosts/MarioParty3Host.cpp \
-    hosts/MarioPartyGcnHost.cpp \
-    hosts/MarioParty4Host.cpp \
-    hosts/MarioParty5Host.cpp \
-    hosts/MarioParty6Host.cpp \
-    hosts/MarioParty7Host.cpp \
-    hosts/MarioParty8Host.cpp \
-    hosts/MarioPartyDSHost.cpp \
-    hosts/SonicShuffleHand.cpp \
-    hosts/SonicShuffleHost.cpp \
-    guests/BanjoTooie.cpp \
-    guests/CoreDolphin.cpp \
-    guests/DolphinGuest.cpp \
-    guests/Kirby64.cpp \
-    guests/KirbyAirRide.cpp \
-    guests/MarioGolf.cpp \
-    guests/MarioKart64.cpp \
-    guests/MarioKartDoubleDash.cpp \
-    guests/MarioKartWii.cpp \
-    guests/MarioParty1.cpp \
-    guests/MarioParty2.cpp \
-    guests/MarioParty3.cpp \
-    guests/MarioPartyAdvance.cpp \
-    guests/MarioPartyE.cpp \
-    guests/MarioParty4.cpp \
-    guests/MarioPartyN64.cpp \
-    guests/MarioParty5.cpp \
-    guests/MarioParty6.cpp \
-    guests/MarioParty7.cpp \
-    guests/MarioParty8.cpp \
-    guests/MarioParty9.cpp \
-    guests/MarioPartyGcn.cpp \
-    guests/MarioTennis.cpp \
-    guests/PokemonStadium.cpp \
-    guests/PokemonStadium2.cpp \
-    guests/SmashRemix.cpp \
-    guests/SonicShuffle.cpp \
-    guests/StarFox64.cpp \
-    guests/SuperMarioBros3.cpp \
-    guests/YoshisIsland.cpp \
+    hosts/DrHosts.cpp \
+    hosts/DrHostRetro.cpp \
+    hosts/impl/MarioPartyN64Host.cpp \
+    hosts/impl/MarioParty1Host.cpp \
+    hosts/impl/MarioParty2Host.cpp \
+    hosts/impl/MarioParty3Host.cpp \
+    hosts/impl/MarioPartyGcnHost.cpp \
+    hosts/impl/MarioParty4Host.cpp \
+    hosts/impl/MarioParty5Host.cpp \
+    hosts/impl/MarioParty6Host.cpp \
+    hosts/impl/MarioParty7Host.cpp \
+    hosts/impl/MarioParty8Host.cpp \
+    hosts/impl/MarioPartyDSHost.cpp \
+    hosts/impl/SonicShuffleHand.cpp \
+    hosts/impl/SonicShuffleHost.cpp \
+    guests/DrGuests.cpp \
+    guests/DrGuestRetro.cpp \
+    guests/DrGuestDolphin.cpp \
+    guests/DrGuestGcn.cpp \
+    guests/DrGuestWii.cpp \
+    guests/impl/BanjoTooie.cpp \
+    guests/impl/Kirby64.cpp \
+    guests/impl/KirbyAirRide.cpp \
+    guests/impl/MarioGolf.cpp \
+    guests/impl/MarioKart64.cpp \
+    guests/impl/MarioKartDoubleDash.cpp \
+    guests/impl/MarioKartWii.cpp \
+    guests/impl/MarioParty1.cpp \
+    guests/impl/MarioParty2.cpp \
+    guests/impl/MarioParty3.cpp \
+    guests/impl/MarioPartyAdvance.cpp \
+    guests/impl/MarioPartyE.cpp \
+    guests/impl/MarioParty4.cpp \
+    guests/impl/MarioPartyN64.cpp \
+    guests/impl/MarioParty5.cpp \
+    guests/impl/MarioParty6.cpp \
+    guests/impl/MarioParty7.cpp \
+    guests/impl/MarioParty8.cpp \
+    guests/impl/MarioParty9.cpp \
+    guests/impl/MarioPartyGcn.cpp \
+    guests/impl/MarioTennis.cpp \
+    guests/impl/PokemonStadium.cpp \
+    guests/impl/PokemonStadium2.cpp \
+    guests/impl/SmashRemix.cpp \
+    guests/impl/SonicShuffle.cpp \
+    guests/impl/StarFox64.cpp \
+    guests/impl/SuperMarioBros3.cpp \
+    guests/impl/YoshisIsland.cpp \
     main.cpp \
     mainwindow.cpp
 
@@ -113,6 +121,8 @@ HEADERS += \
     DrDownloader.h \
     DrGuest.h \
     DrGuestList.h \
+    DrHostPicker.h \
+    DrStartup.h \
     DrHost.h \
     DrInputStore.h \
     DrMinigameFilter.h \
@@ -122,50 +132,65 @@ HEADERS += \
     DrOverlay.h \
     DrToolWindow.h \
     DrRetro.h \
+    DrRetroDS.h \
+    DrRetroDolphin.h \
+    DrRetroGcn.h \
+    DrRetroN64.h \
+    DrRetroNES.h \
+    DrRetroWii.h \
     QRetroInputBackendShared.h \
-    hosts/MarioPartyN64Host.h \
-    hosts/MarioParty1Host.h \
-    hosts/MarioParty2Host.h \
-    hosts/MarioParty3Host.h \
-    hosts/MarioPartyGcnHost.h \
-    hosts/MarioParty4Host.h \
-    hosts/MarioParty5Host.h \
-    hosts/MarioParty6Host.h \
-    hosts/MarioParty7Host.h \
-    hosts/MarioParty8Host.h \
-    hosts/MarioPartyDSHost.h \
-    hosts/SonicShuffleHand.h \
-    hosts/SonicShuffleHost.h \
-    guests/BanjoTooie.h \
-    guests/CoreDolphin.h \
-    guests/DolphinGuest.h \
-    guests/Kirby64.h \
-    guests/KirbyAirRide.h \
-    guests/MarioGolf.h \
-    guests/MarioKart64.h \
-    guests/MarioKartDoubleDash.h \
-    guests/MarioKartWii.h \
-    guests/MarioParty1.h \
-    guests/MarioParty2.h \
-    guests/MarioParty3.h \
-    guests/MarioPartyAdvance.h \
-    guests/MarioPartyE.h \
-    guests/MarioParty4.h \
-    guests/MarioPartyN64.h \
-    guests/MarioParty5.h \
-    guests/MarioParty6.h \
-    guests/MarioParty7.h \
-    guests/MarioParty8.h \
-    guests/MarioParty9.h \
-    guests/MarioPartyGcn.h \
-    guests/MarioTennis.h \
-    guests/PokemonStadium.h \
-    guests/PokemonStadium2.h \
-    guests/SmashRemix.h \
-    guests/SonicShuffle.h \
-    guests/StarFox64.h \
-    guests/SuperMarioBros3.h \
-    guests/YoshisIsland.h \
+    hosts/DrHosts.h \
+    hosts/DrHostDS.h \
+    hosts/DrHostN64.h \
+    hosts/DrHostRetro.h \
+    hosts/impl/MarioPartyN64Host.h \
+    hosts/impl/MarioParty1Host.h \
+    hosts/impl/MarioParty2Host.h \
+    hosts/impl/MarioParty3Host.h \
+    hosts/impl/MarioPartyGcnHost.h \
+    hosts/impl/MarioParty4Host.h \
+    hosts/impl/MarioParty5Host.h \
+    hosts/impl/MarioParty6Host.h \
+    hosts/impl/MarioParty7Host.h \
+    hosts/impl/MarioParty8Host.h \
+    hosts/impl/MarioPartyDSHost.h \
+    hosts/impl/SonicShuffleHand.h \
+    hosts/impl/SonicShuffleHost.h \
+    guests/DrGuests.h \
+    guests/DrGuestN64.h \
+    guests/DrGuestNES.h \
+    guests/DrGuestRetro.h \
+    guests/DrGuestDolphin.h \
+    guests/DrGuestGcn.h \
+    guests/DrGuestWii.h \
+    guests/impl/BanjoTooie.h \
+    guests/impl/Kirby64.h \
+    guests/impl/KirbyAirRide.h \
+    guests/impl/MarioGolf.h \
+    guests/impl/MarioKart64.h \
+    guests/impl/MarioKartDoubleDash.h \
+    guests/impl/MarioKartWii.h \
+    guests/impl/MarioParty1.h \
+    guests/impl/MarioParty2.h \
+    guests/impl/MarioParty3.h \
+    guests/impl/MarioPartyAdvance.h \
+    guests/impl/MarioPartyE.h \
+    guests/impl/MarioParty4.h \
+    guests/impl/MarioPartyN64.h \
+    guests/impl/MarioParty5.h \
+    guests/impl/MarioParty6.h \
+    guests/impl/MarioParty7.h \
+    guests/impl/MarioParty8.h \
+    guests/impl/MarioParty9.h \
+    guests/impl/MarioPartyGcn.h \
+    guests/impl/MarioTennis.h \
+    guests/impl/PokemonStadium.h \
+    guests/impl/PokemonStadium2.h \
+    guests/impl/SmashRemix.h \
+    guests/impl/SonicShuffle.h \
+    guests/impl/StarFox64.h \
+    guests/impl/SuperMarioBros3.h \
+    guests/impl/YoshisIsland.h \
     mainwindow.h
 
 RESOURCES += assets.qrc

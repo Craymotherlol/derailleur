@@ -24,7 +24,6 @@
 #include "impl/SonicShuffle.h"
 #include "impl/StarFox64.h"
 #include "impl/SuperMarioBros3.h"
-#include "impl/WiiParty.h"
 #include "impl/YoshisIsland.h"
 
 static void dr_add(DrGuestList *list, DrGuest *guest)
@@ -64,8 +63,6 @@ void dr_create_guests(DrGuestList *list)
   dr_add(list, new SonicShuffle());
   dr_add(list, new StarFox64());
   dr_add(list, new SuperMarioBros3());
-
-  dr_add(list, new WiiParty());
 
   dr_add(list, new YoshisIsland());
 }

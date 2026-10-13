@@ -10,9 +10,6 @@
 #include "impl/MarioParty8Host.h"
 #include "impl/MarioPartyDSHost.h"
 #include "impl/SonicShuffleHost.h"
-#ifdef DR_HAVE_WEBENGINE
-#include "impl/PartyProjectHost.h"
-#endif
 
 template <typename T>
 static DrHost *dr_create_host(QObject *parent, const std::string &rom)
@@ -47,10 +44,6 @@ static const DrHostEntry DR_HOSTS[] = {
     DR_CORE_MELONDSDS, dr_create_host_stock<MarioPartyDSHost> },
   { DR_GAME_SONICSHUFFLE, "Sonic Shuffle", nullptr, "Sonic Shuffle (USA).chd",
     DR_CORE_FLYCAST, dr_create_host_stock<SonicShuffleHost> },
-#ifdef DR_HAVE_WEBENGINE
-  { DR_GAME_PARTYPROJECT, "Party Project", "partyproject", "package.nw",
-    DR_CORE_INVALID, dr_create_host_stock<PartyProjectHost> },
-#endif
 
   { DR_GAME_INVALID, nullptr, nullptr, nullptr, DR_CORE_INVALID, nullptr }
 };
