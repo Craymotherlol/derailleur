@@ -24,42 +24,66 @@ class QRetroInputBackend;
 class QTcpServer;
 class QTcpSocket;
 
-/* Wire message types: [1-byte type][fixed-size payload]. */
 typedef enum
 {
-  DR_NETPLAY_PACKET_HANDSHAKE    = 0x01, /* server -> client: { peerIndex, peerCount } */
-  DR_NETPLAY_PACKET_START        = 0x02, /* server -> client: var: [u8 game][u32 seed][utf8 custom rom] */
-  DR_NETPLAY_PACKET_INPUT        = 0x03, /* either direction: DrNetplayPacket */
-  /* 0x04 retired (was CANDIDATES; peers now roll candidates from the shared PRNG). */
-  DR_NETPLAY_PACKET_SET_DELAY    = 0x05, /* any peer (relayed): new input delay, 1 byte */
-  DR_NETPLAY_PACKET_RESYNC_BEGIN = 0x06, /* server -> clients: { context } stop for resync */
-  DR_NETPLAY_PACKET_RESYNC_STATE = 0x07, /* server -> clients: [u32 len][u64 frame][zstate] */
-  DR_NETPLAY_PACKET_VERSION      = 0x08, /* client -> server: build hash on connect */
-  DR_NETPLAY_PACKET_MINIGAME_FILTER = 0x09, /* server -> clients: var-length disabled-set payload */
-  DR_NETPLAY_PACKET_RESYNC_REQUEST  = 0x0A, /* client -> server: I timed out, please hard-resync */
-  DR_NETPLAY_PACKET_SAVE            = 0x0B, /* server -> clients: var-length save-directory bundle */
-  DR_NETPLAY_PACKET_CANCEL          = 0x0C, /* any peer (relayed): cancel the active mini-game */
-  DR_NETPLAY_PACKET_GOLF            = 0x0D, /* any peer (relayed): { s8 authority, u8 highDelay } */
-  DR_NETPLAY_PACKET_LAUNCH          = 0x0E  /* var: [u64 frame][opaque]; frame 0 = client request */
+  DR_NETPLAY_PACKET_INVALID = 0,
+
+  /* server -> client: { peerIndex, peerCount } */
+  DR_NETPLAY_PACKET_HANDSHAKE,
+
+  /* server -> client: var: [u8 game][u32 seed][utf8 custom rom] */
+  DR_NETPLAY_PACKET_START,
+
+  /* either direction: DrNetplayPacket */
+  DR_NETPLAY_PACKET_INPUT,
+
+  /* any peer (relayed): new input delay, 1 byte */
+  DR_NETPLAY_PACKET_SET_DELAY,
+
+  /* server -> clients: { context } stop for resync */
+  DR_NETPLAY_PACKET_RESYNC_BEGIN,
+  
+  /* server -> clients: [u32 len][u64 frame][zstate] */
+  DR_NETPLAY_PACKET_RESYNC_STATE,
+
+  /* client -> server: build hash on connect */
+  DR_NETPLAY_PACKET_VERSION,
+
+  /* server -> clients: var-length disabled-set payload */
+  DR_NETPLAY_PACKET_MINIGAME_FILTER,
+
+  /* client -> server: I timed out, please hard-resync */
+  DR_NETPLAY_PACKET_RESYNC_REQUEST,
+
+  /* server -> clients: var-length save-directory bundle */
+  DR_NETPLAY_PACKET_SAVE,
+
+  /* any peer (relayed): cancel the active mini-game */
+  DR_NETPLAY_PACKET_CANCEL,
+
+  /* any peer (relayed): { s8 authority } */
+  DR_NETPLAY_PACKET_GOLF,
+
+  /* var: [u64 frame][opaque]; frame 0 = client request */
+  DR_NETPLAY_PACKET_LAUNCH
 } dr_netplay_packet_type;
 
 /* Maximum peers in a session (also the per-frame input array width). */
 #define DR_NETPLAY_MAX_PEERS 4
 
-/* Maximum QRetro contexts (host + guests) tracked per peer. Must exceed the number of
- * distinct cores attached (host + every non-Dolphin guest + each shared Dolphin core);
- * a guest past this limit silently fails attachCore, runs ungated, and shows as context
- * -1 in logs. The wire `context` field is a uint8_t, so anything up to 255 is safe. */
+/* Maximum QRetro contexts (host + guests) tracked per peer; at most 255. A core past
+ * this limit fails attachCore and logs as context -1. */
 #define DR_NETPLAY_MAX_CONTEXTS 48
 
-/* A hard resync jumps the per-context frame counter forward by this margin so
- * the post-resync timeline can never collide with stale in-flight packets from
- * before the resync (which sit within a few frames of the old counter). */
-#define DR_NETPLAY_RESYNC_MARGIN 600
+/* Number of frames ahead to schedule a hard resync */
+#define DR_NETPLAY_RESYNC_MARGIN 60
 
 /* How many frames ahead of the current active-context frame a debug-menu launch is
  * scheduled, so the broadcast reaches every peer before that gated frame arrives. */
 #define DR_NETPLAY_LAUNCH_DELAY 60
+
+/* Under golf mode, the input delay every peer but the authority sends with. */
+#define DR_NETPLAY_GOLF_HIGH_DELAY 20
 
 /* Input packet payload: quint64 + quint8 + quint8 + quint16 + 6 * qint16 + validator + quint32. */
 #define DR_NETPLAY_PACKET_PAYLOAD_SIZE (8 + 1 + 1 + 2 + 6 * 2 + sizeof(dr_sync_validator_t) + 4)
@@ -82,25 +106,6 @@ struct DrNetplayPacket
 };
 #pragma pack(pop)
 
-/**
- * Handles TCP networking, input delay and lockstep synchronization for netplay,
- * writing committed frames into a DrInputStore.
- *
- * Every peer runs the same derailleur instance; "server" is purely a network
- * coordination role (peer index 0) and is unrelated to DrHost. Clients connect
- * to the server in a star topology; the server relays each peer's input to the
- * others so all peers observe every peer's input for every frame.
- *
- * Threading: frameBegin is emitted on a QRetro timing thread, while all sockets
- * live on the main thread. onFrameBegin() therefore records its own input,
- * marshals network sends to the main thread, and blocks the timing thread on a
- * wait condition until the expected frame is complete (filled by the main
- * thread's socket slots) — genuinely pausing the core rather than busy-spinning.
- *
- * Each QRetro context (the host and each guest core) keeps its own frame counter
- * so boot/load-time differences between peers don't desync them; only the
- * foreground context (set via setActiveContext) is gated at any time.
- */
 class DrNetplay : public QObject
 {
   Q_OBJECT
@@ -130,17 +135,17 @@ public:
   int inputDelay() const { return m_InputDelay.load(); }
 
   /// "Golf mode": one player (a peer index) sends with 0 input delay while everyone
-  /// else sends with `highDelay` frames, giving that player responsive, priority
+  /// else sends with DR_NETPLAY_GOLF_HIGH_DELAY frames, giving that player responsive, priority
   /// authority in turn-based games (e.g. golf). `authorityPlayer` < 0 turns it off.
   /// Purely local (each peer applies it to its own send scheduling, which is
   /// frame-tagged and stays deterministic); safe to call any time, in or out of a
   /// session.
-  void setGolfMode(int authorityPlayer, int highDelay = 30);
+  void setGolfMode(int authorityPlayer);
 
   /// Applies golf mode locally (see setGolfMode) AND propagates it to every peer, so
   /// one peer can drive it (e.g. the host from the netplay UI). Use this instead of
   /// setGolfMode when the call happens on only one peer rather than in lockstep.
-  void broadcastGolfMode(int authorityPlayer, int highDelay = 30);
+  void broadcastGolfMode(int authorityPlayer);
 
   /// Changes the input delay (buffer frames) locally and, during a session,
   /// propagates it to every peer (the server relays). Safe to call mid-session:
@@ -235,14 +240,14 @@ private slots:
   void onSocketDisconnected();
 
 private:
-  /// This peer's current send delay: 0 or m_GolfHighDelay under golf mode (by whether
+  /// This peer's current send delay: 0 or DR_NETPLAY_GOLF_HIGH_DELAY under golf mode (by whether
   /// this peer is the authority), otherwise m_InputDelay.
   int effectiveDelay() const
   {
     const int authority = m_GolfAuthority.load();
     if (authority < 0)
       return m_InputDelay.load();
-    return (m_PeerIndex == authority) ? 0 : m_GolfHighDelay.load();
+    return (m_PeerIndex == authority) ? 0 : DR_NETPLAY_GOLF_HIGH_DELAY;
   }
 
   /// "index (name)" for logs, or just the index when the context has no name.
@@ -300,9 +305,8 @@ private:
   int m_PeerCount = 1;
   std::atomic<int> m_InputDelay{ 2 };
   /* "Golf mode": the authority peer sends with 0 delay, everyone else with
-   * m_GolfHighDelay. -1 = off (use m_InputDelay for everyone). See effectiveDelay. */
+   * DR_NETPLAY_GOLF_HIGH_DELAY. -1 = off (use m_InputDelay for everyone). See effectiveDelay. */
   std::atomic<int> m_GolfAuthority{ -1 };
-  std::atomic<int> m_GolfHighDelay{ 15 };
   int m_TimeoutMs = 5000; /* stall this long before requesting a hard resync */
 
   bool m_Active = false;

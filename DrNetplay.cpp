@@ -173,16 +173,10 @@ void DrNetplay::startGame(int gameId, const QStringList &saveFilters, const QStr
    * own custom folder. Empty means the stock game. */
   payload.append(customRom.toUtf8());
 
-  /* Deliver the authoritative allowed-mini-games filter *before* START so each
-   * client applies it before it builds its host and decides which guests to
-   * load. TCP preserves order and onSocketReadyRead processes messages
-   * front-to-back, so the filter is applied first. (Delivered at least once.) */
+  /* Share the mini-game filter */
   broadcastVar(DR_NETPLAY_PACKET_MINIGAME_FILTER, m_MinigameFilter);
 
-  /* Ship the host game's save so every client plays off it (same unlocks / SRAM).
-   * Only the files the host asked for are sent, not the whole save folder. Sent
-   * before START so clients redirect their save dir before building the host and
-   * loading content. */
+  /* Perform save synchronization */
   {
     const QByteArray bundle = dr_bundle_directory(dr_save_directory(), saveFilters);
     broadcastVar(DR_NETPLAY_PACKET_SAVE, bundle);
@@ -232,9 +226,8 @@ void DrNetplay::changeInputDelay(int frames)
     writeMessage(m_Sockets.first(), DR_NETPLAY_PACKET_SET_DELAY, payload);
 }
 
-void DrNetplay::setGolfMode(int authorityPlayer, int highDelay)
+void DrNetplay::setGolfMode(int authorityPlayer)
 {
-  m_GolfHighDelay = qBound(0, highDelay, 120);
   m_GolfAuthority = authorityPlayer;
   /* No broadcast and no pipeline reset needed: effectiveDelay() only changes this
    * peer's own send scheduling, and the send loop back-fills/drains the delay change
@@ -244,17 +237,16 @@ void DrNetplay::setGolfMode(int authorityPlayer, int highDelay)
   else
     emit logMessage(DR_LOG_INFO,
       QString("netplay: golf mode on (authority peer %1 = 0 delay, others %2 frames)")
-        .arg(authorityPlayer).arg(m_GolfHighDelay.load()));
+        .arg(authorityPlayer).arg(DR_NETPLAY_GOLF_HIGH_DELAY));
 }
 
-void DrNetplay::broadcastGolfMode(int authorityPlayer, int highDelay)
+void DrNetplay::broadcastGolfMode(int authorityPlayer)
 {
-  setGolfMode(authorityPlayer, highDelay);
+  setGolfMode(authorityPlayer);
   if (!m_Active)
     return;
   QByteArray payload;
   payload.append(static_cast<char>(static_cast<int8_t>(authorityPlayer)));
-  payload.append(static_cast<char>(static_cast<uint8_t>(m_GolfHighDelay.load())));
   /* The server fans it out; a client sends it to the server, which relays it on. */
   if (m_IsServer)
     broadcast(DR_NETPLAY_PACKET_GOLF, payload);
@@ -1021,8 +1013,7 @@ void DrNetplay::handleMessage(QTcpSocket *sock, quint8 type, const QByteArray &p
   case DR_NETPLAY_PACKET_GOLF:
   {
     const int authority = payload.size() >= 1 ? static_cast<int8_t>(payload.at(0)) : -1;
-    const int highDelay = payload.size() >= 2 ? static_cast<uint8_t>(payload.at(1)) : 30;
-    setGolfMode(authority, highDelay);
+    setGolfMode(authority);
     /* The server relays it on to the other clients. */
     if (m_IsServer)
       broadcast(DR_NETPLAY_PACKET_GOLF, payload, sock);
@@ -1382,8 +1373,6 @@ void DrNetplay::abort()
   m_FrameReady.wakeAll();
 }
 
-/* ── Packet (de)serialization and joypad mapping ───────────────── */
-
 quint64 DrNetplay::frameKey(int context, quint64 frame)
 {
   return (static_cast<quint64>(context) << 48) | (frame & 0xFFFFFFFFFFFFull);
@@ -1408,7 +1397,7 @@ int DrNetplay::payloadLength(quint8 type)
   case DR_NETPLAY_PACKET_CANCEL:
     return 0;
   case DR_NETPLAY_PACKET_GOLF:
-    return 2;
+    return 1;
   default:
     return -1;
   }
