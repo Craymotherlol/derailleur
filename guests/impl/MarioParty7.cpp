@@ -1,0 +1,236 @@
+#include "MarioParty7.h"
+
+#include <cstring>
+
+/* Mario Party 7's playable roster, in native id order. */
+typedef enum
+{
+  MP7_CHARACTER_MARIO = 0x0,
+  MP7_CHARACTER_LUIGI = 0x1,
+  MP7_CHARACTER_PEACH = 0x2,
+  MP7_CHARACTER_YOSHI = 0x3,
+  MP7_CHARACTER_WARIO = 0x4,
+  MP7_CHARACTER_DAISY = 0x5,
+  MP7_CHARACTER_WALUIGI = 0x6,
+  MP7_CHARACTER_TOAD = 0x7,
+  MP7_CHARACTER_BOO = 0x8,
+  MP7_CHARACTER_TOADETTE = 0x9,
+  MP7_CHARACTER_BIRDO = 0xA,
+  MP7_CHARACTER_DRY_BONES = 0xB,
+  MP7_CHARACTER_KOOPA_KID_R = 0xC,
+  MP7_CHARACTER_KOOPA_KID_G = 0xD,
+  MP7_CHARACTER_KOOPA_KID_B = 0xE
+} mp7_character;
+
+static dr_character_id_t mp7_char_from_dr(dr_character character)
+{
+  switch (character)
+  {
+  /* Supported characters */
+  case DR_CHARACTER_MARIO:
+    return { MP7_CHARACTER_MARIO, true };
+  case DR_CHARACTER_LUIGI:
+    return { MP7_CHARACTER_LUIGI, true };
+  case DR_CHARACTER_PEACH:
+    return { MP7_CHARACTER_PEACH, true };
+  case DR_CHARACTER_YOSHI:
+    return { MP7_CHARACTER_YOSHI, true };
+  case DR_CHARACTER_WARIO:
+    return { MP7_CHARACTER_WARIO, true };
+  case DR_CHARACTER_DAISY:
+    return { MP7_CHARACTER_DAISY, true };
+  case DR_CHARACTER_WALUIGI:
+    return { MP7_CHARACTER_WALUIGI, true };
+  case DR_CHARACTER_TOAD:
+    return { MP7_CHARACTER_TOAD, true };
+  case DR_CHARACTER_BOO:
+    return { MP7_CHARACTER_BOO, true };
+  case DR_CHARACTER_TOADETTE:
+    return { MP7_CHARACTER_TOADETTE, true };
+  case DR_CHARACTER_BIRDO:
+    return { MP7_CHARACTER_BIRDO, true };
+  case DR_CHARACTER_DRY_BONES:
+    return { MP7_CHARACTER_DRY_BONES, true };
+  case DR_CHARACTER_KOOPA_KID_R:
+    return { MP7_CHARACTER_KOOPA_KID_R, true };
+  case DR_CHARACTER_KOOPA_KID_G:
+    return { MP7_CHARACTER_KOOPA_KID_G, true };
+  case DR_CHARACTER_KOOPA_KID_B:
+    return { MP7_CHARACTER_KOOPA_KID_B, true };
+
+  /* Character replacements */
+  case DR_CHARACTER_DONKEY_KONG:
+    return { MP7_CHARACTER_BOO, false };
+  case DR_CHARACTER_KOOPA_KID:
+    return { MP7_CHARACTER_KOOPA_KID_G, false };
+  case DR_CHARACTER_BLOOPER:
+    return { MP7_CHARACTER_PEACH, false };
+  case DR_CHARACTER_HAMMER_BRO:
+    return { MP7_CHARACTER_MARIO, false };
+  default:
+    return { MP7_CHARACTER_MARIO, false };
+  }
+}
+
+static const dr_mp_minigame_t MP7_MINIGAMES[] = {
+  /* 4-Player */
+  { "Catchy Tunes", DR_MINIGAME_4P, 0x00, 0x07, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Bubble Brawl", DR_MINIGAME_4P, 0x01, 0x08, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Track & Yield", DR_MINIGAME_4P, 0x02, 0x09, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Fun Run", DR_MINIGAME_4P, 0x03, 0x0A, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Cointagious", DR_MINIGAME_4P, 0x04, 0x0B, DR_NO_QUIRKS, DR_FLAG_LUCKY },
+  { "Snow Ride", DR_MINIGAME_4P, 0x05, 0x0C, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Picture This", DR_MINIGAME_4P, 0x07, 0x0E, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Ghost in the Hall", DR_MINIGAME_4P, 0x08, 0x0F, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Big Dripper", DR_MINIGAME_4P, 0x09, 0x10, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Target Tag", DR_MINIGAME_4P, 0x0A, 0x11, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Pokey Pummel", DR_MINIGAME_4P, 0x0B, 0x12, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Take Me Ohm", DR_MINIGAME_4P, 0x0C, 0x13, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Kart Wheeled", DR_MINIGAME_4P, 0x0D, 0x14, DR_NO_QUIRKS, DR_NO_FLAGS },
+
+  /* 4-Player Mic */
+  { "Balloon Busters", DR_MINIGAME_4P, 0x0E, 0x15, DR_NO_QUIRKS, DR_FLAG_MIC },
+  { "Clock Watchers", DR_MINIGAME_4P, 0x0F, 0x16, DR_NO_QUIRKS, DR_FLAG_MIC },
+  { "Dart Attack", DR_MINIGAME_4P, 0x10, 0x17, DR_NO_QUIRKS, DR_FLAG_MIC },
+  { "Oil Crisis", DR_MINIGAME_4P, 0x12, 0x18, DR_NO_QUIRKS, DR_FLAG_MIC },
+  { "Mathemortician", DR_MINIGAME_4P, 0x57, 0x5D, DR_NO_QUIRKS, DR_FLAG_MIC },
+
+  /* 1-vs.-3 */
+  { "La Bomba", DR_MINIGAME_1V3, 0x14, 0x1A, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Spray Anything", DR_MINIGAME_1V3, 0x15, 0x1B, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Balloonatic", DR_MINIGAME_1V3, 0x16, 0x1C, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Spinner Cell", DR_MINIGAME_1V3, 0x17, 0x1D, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Think Tank", DR_MINIGAME_1V3, 0x18, 0x1E, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Flashfright", DR_MINIGAME_1V3, 0x19, 0x1F, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Coin-op Bop", DR_MINIGAME_1V3, 0x1A, 0x20, DR_NO_QUIRKS, DR_FLAG_LUCKY },
+  { "Easy Pickings", DR_MINIGAME_1V3, 0x1B, 0x21, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Pogo-a-go-go", DR_MINIGAME_1V3, 0x20, 0x26, DR_NO_QUIRKS, DR_NO_FLAGS },
+
+  /* 1-vs.-3 Mic */
+  { "Number Crunchers", DR_MINIGAME_1V3, 0x13, 0x19, DR_NO_QUIRKS, DR_FLAG_MIC },
+  { "Wheel of Woe", DR_MINIGAME_1V3, 0x1C, 0x22, DR_NO_QUIRKS, DR_FLAG_MIC },
+  { "Boxing Day", DR_MINIGAME_1V3, 0x1D, 0x23, DR_NO_QUIRKS, DR_FLAG_MIC },
+  { "Be My Chum!", DR_MINIGAME_1V3, 0x1E, 0x24, DR_NO_QUIRKS, DR_FLAG_MIC },
+  { "StratosFEAR!", DR_MINIGAME_1V3, 0x1F, 0x25, DR_NO_QUIRKS, DR_FLAG_MIC },
+
+  /* 2-vs.-2 */
+  { "Buzzstormer", DR_MINIGAME_2V2, 0x21, 0x27, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Tile and Error", DR_MINIGAME_2V2, 0x22, 0x28, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Battery Ram", DR_MINIGAME_2V2, 0x23, 0x29, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Cardinal Rule", DR_MINIGAME_2V2, 0x24, 0x2A, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Bumper Crop", DR_MINIGAME_2V2, 0x26, 0x2C, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Hop-O-Matic 4000", DR_MINIGAME_2V2, 0x27, 0x2D, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Wingin' It", DR_MINIGAME_2V2, 0x28, 0x2E, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Sphere Factor", DR_MINIGAME_2V2, 0x29, 0x2F, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Herbicidal Maniac", DR_MINIGAME_2V2, 0x2A, 0x30, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Pyramid Scheme", DR_MINIGAME_2V2, 0x2B, 0x31, DR_NO_QUIRKS, DR_FLAG_LUCKY },
+  { "World Piece", DR_MINIGAME_2V2, 0x2C, 0x32, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Spider Stomp", DR_MINIGAME_2V2, 0x4A, 0x50, DR_NO_QUIRKS, DR_NO_FLAGS },
+
+  /* Battle */
+  { "Helipopper", DR_MINIGAME_BATTLE, 0x2F, 0x35, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Monty's Revenge", DR_MINIGAME_BATTLE, 0x30, 0x36, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Deck Hands", DR_MINIGAME_BATTLE, 0x31, 0x37, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Air Farce", DR_MINIGAME_BATTLE, 0x37, 0x3D, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "The Final Countdown", DR_MINIGAME_BATTLE, 0x38, 0x3E, DR_NO_QUIRKS, DR_NO_FLAGS },
+
+  /* Duel */
+  { "Warp Pipe Dreams", DR_MINIGAME_DUEL, 0x2D, 0x33, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Weight for It", DR_MINIGAME_DUEL, 0x2E, 0x34, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Mad Props", DR_MINIGAME_DUEL, 0x32, 0x38, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Gimme a Sign", DR_MINIGAME_DUEL, 0x33, 0x39, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Bridge Work", DR_MINIGAME_DUEL, 0x34, 0x3A, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Spin Doctor", DR_MINIGAME_DUEL, 0x35, 0x3B, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Hip Hop Drop", DR_MINIGAME_DUEL, 0x36, 0x3C, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Royal Rumpus", DR_MINIGAME_DUEL, 0x39, 0x3F, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Light Speed", DR_MINIGAME_DUEL, 0x3A, 0x40, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Apes of Wrath", DR_MINIGAME_DUEL, 0x3B, 0x41, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Fish & Cheeps", DR_MINIGAME_DUEL, 0x3C, 0x42, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Camp Ukiki", DR_MINIGAME_DUEL, 0x3D, 0x43, DR_NO_QUIRKS, DR_NO_FLAGS },
+
+  /* DK minigames (single-player) */
+  { "Jump, Man", DR_MINIGAME_DK, 0x47, 0x4D, DR_NO_QUIRKS, DR_FLAG_SOLO },
+  { "Vine Country", DR_MINIGAME_DK, 0x48, 0x4E, DR_NO_QUIRKS, DR_FLAG_SOLO },
+  { "A Bridge Too Short", DR_MINIGAME_DK, 0x49, 0x4F, DR_NO_QUIRKS, DR_FLAG_SOLO },
+
+  /* Bowser minigames (single-player) */
+  { "Tunnel of Lava!", DR_MINIGAME_BOWSER, 0x41, 0x47, DR_NO_QUIRKS, DR_FLAG_SOLO },
+  { "Treasure Dome!", DR_MINIGAME_BOWSER, 0x42, 0x48, DR_NO_QUIRKS, DR_FLAG_SOLO },
+  { "Slot-O-Whirl!", DR_MINIGAME_BOWSER, 0x43, 0x49, DR_NO_QUIRKS, DR_FLAG_SOLO },
+
+  /* DK minigames (multiplayer) */
+  { "Peel Out", DR_MINIGAME_DK, 0x44, 0x4A, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Bananas Faster", DR_MINIGAME_DK, 0x45, 0x4B, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Stump Change", DR_MINIGAME_DK, 0x46, 0x4C, DR_NO_QUIRKS, DR_NO_FLAGS },
+
+  /* Bowser minigames (multiplayer) */
+  { "Funstacle Course!", DR_MINIGAME_BOWSER, 0x3E, 0x44, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Funderwall!", DR_MINIGAME_BOWSER, 0x3F, 0x45, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Magmagical Journey!", DR_MINIGAME_BOWSER, 0x40, 0x46, DR_NO_QUIRKS, DR_NO_FLAGS },
+
+  /* Rare / Boss */
+  { "Ice Moves", DR_MINIGAME_SPECIAL, 0x25, 0x2B, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Stick and Spin", DR_MINIGAME_SPECIAL, 0x4B, 0x51, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Bowser's Lovely Lift!", DR_MINIGAME_SPECIAL, 0x55, 0x5B, DR_NO_QUIRKS, DR_NO_FLAGS },
+
+  { nullptr, DR_MINIGAME_INVALID, 0xFF, 0xFF, DR_NO_QUIRKS, DR_NO_FLAGS },
+};
+
+static MpGcnConfig buildConfig()
+{
+  MpGcnConfig config = {};
+
+  config.game = (dr_roms_directory() + "/Mario Party 7 (USA) (Rev 1)").toStdString();
+  config.state = "mp7";
+
+  config.scene_miniexplain = 0x06;
+  config.scene_miniresults = 0x73;
+
+  config.scene = { 0x802f2f3c, DR_VALUE_TYPE_S32 };
+  config.rng = { 0x802f21ec, DR_VALUE_TYPE_U32 };
+  config.timer = { 0x802F2C3C, DR_VALUE_TYPE_U32 };
+  config.minigame = { 0x80291558, DR_VALUE_TYPE_S16 };
+
+  const size_t character_addr[4]    = { 0x80290c48, 0x80290c52, 0x80290c5c, 0x80290c66 };
+  const size_t controller_addr[4]   = { 0x80290c4a, 0x80290c54, 0x80290c5e, 0x80290c68 };
+  const size_t difficulty_addr[4]   = { 0x80290c4c, 0x80290c56, 0x80290c60, 0x80290c6a };
+  const size_t team_addr[4]         = { 0x80290c4e, 0x80290c58, 0x80290c62, 0x80290c6c };
+  const size_t bot_addr[4]          = { 0x80290c50, 0x80290c5a, 0x80290c64, 0x80290c6e };
+  const size_t bonus_result_addr[4] = { 0x80290cc8, 0x80290dd8, 0x80290ee8, 0x80290ff8 };
+  const size_t result_addr[4]       = { 0x80290cca, 0x80290dda, 0x80290eea, 0x80290ffa };
+
+  for (unsigned i = 0; i < 4; i++)
+  {
+    config.character[i] = { character_addr[i], DR_VALUE_TYPE_U16 };
+    config.controller[i] = { controller_addr[i], DR_VALUE_TYPE_U16 };
+    config.difficulty[i] = { difficulty_addr[i], DR_VALUE_TYPE_U16 };
+    config.team[i] = { team_addr[i], DR_VALUE_TYPE_U16 };
+    config.bot[i] = { bot_addr[i], DR_VALUE_TYPE_U16 };
+    config.bonus_result[i] = { bonus_result_addr[i], DR_VALUE_TYPE_U16 };
+    config.result[i] = { result_addr[i], DR_VALUE_TYPE_U16 };
+  }
+
+  config.char_from_dr = mp7_char_from_dr;
+  config.roster_size = 15;
+  config.minigames = MP7_MINIGAMES;
+
+  return config;
+}
+
+/* Whether the game listens to the microphone: 0 enabled, 1 disabled, 2 use the
+ * controller instead. Held at 2 so a mic mini-game is playable without one. */
+static const dr_value_t MP7_MIC_OPTION = { 0x802F2630, DR_VALUE_TYPE_S32 };
+
+#define MP7_MIC_CONTROLLER 2
+
+void MarioParty7::doApplyGameData(const DrGameData &data)
+{
+  MarioPartyGcn::doApplyGameData(data);
+
+  m_retro->writeValue(MP7_MIC_CONTROLLER, MP7_MIC_OPTION);
+}
+
+MarioParty7::MarioParty7(QObject *parent)
+  : MarioPartyGcn(buildConfig(), "gcn-mp7", parent)
+{
+}

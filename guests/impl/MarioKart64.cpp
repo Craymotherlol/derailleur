@@ -1,0 +1,227 @@
+#include "MarioKart64.h"
+
+#include <QFile>
+#include <QRetro.h>
+
+static const dr_value_t MK64_MENU_CHAR[4] = {
+  { 0x8018EDE4, DR_VALUE_TYPE_U8 },
+  { 0x8018EDE5, DR_VALUE_TYPE_U8 },
+  { 0x8018EDE6, DR_VALUE_TYPE_U8 },
+  { 0x8018EDE7, DR_VALUE_TYPE_U8 }
+};
+static const dr_value_t MK64_REAL_CHAR[4] = {
+  { 0x800e86a8, DR_VALUE_TYPE_U8 },
+  { 0x800e86a9, DR_VALUE_TYPE_U8 },
+  { 0x800e86aa, DR_VALUE_TYPE_U8 },
+  { 0x800e86ab, DR_VALUE_TYPE_U8 }
+};
+
+static const dr_value_t MK64_COURSE = { 0x8018EE0B, DR_VALUE_TYPE_U8 };
+static const dr_value_t MK64_CUP = { 0x8018EE09, DR_VALUE_TYPE_U8 };
+static const dr_value_t MK64_TRACK = { 0x800dc5a1, DR_VALUE_TYPE_U8 };
+
+static const dr_value_t MK64_LAPS[4] = {
+  { 0x80164390, DR_VALUE_TYPE_U32 },
+  { 0x80164394, DR_VALUE_TYPE_U32 },
+  { 0x80164398, DR_VALUE_TYPE_U32 },
+  { 0x8016439C, DR_VALUE_TYPE_U32 }
+}; // u32
+
+// s16 per-player status; P1 at MK64_PLAYER_STATUS_ADDR, +MK64_PLAYER_STRIDE per slot.
+// ORing MK64_STATUS_BOT marks that racer as a CPU/bot.
+static const size_t MK64_PLAYER_STATUS_ADDR = 0x800F6990;
+static const size_t MK64_PLAYER_STRIDE = 0xDD8;
+static const int16_t MK64_STATUS_BOT = 0x1000;
+
+static const char MK64_CHEAT_MULTIPLAYER_MUSIC[] =
+  "8128EC9C 240E"
+  "+8128EC9E 0001"
+  "+8128F9C4 2409"
+  "+8128F9C6 0001";
+
+static const dr_mp_minigame_t MK64_MINIGAMES[] = {
+  { "MK64: Luigi Raceway", DR_MINIGAME_4P, 0x00, 0xFF, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "MK64: Moo Moo Farm", DR_MINIGAME_4P, 0x01, 0xFF, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "MK64: Koopa Troopa Beach", DR_MINIGAME_4P, 0x02, 0xFF, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "MK64: Kalimari Desert", DR_MINIGAME_4P, 0x03, 0xFF, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "MK64: Toad's Turnpike", DR_MINIGAME_4P, 0x04, 0xFF, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "MK64: Frappe Snowland", DR_MINIGAME_4P, 0x05, 0xFF, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "MK64: Choco Mountain", DR_MINIGAME_4P, 0x06, 0xFF, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "MK64: Mario Raceway", DR_MINIGAME_4P, 0x07, 0xFF, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "MK64: Wario Stadium", DR_MINIGAME_4P, 0x08, 0xFF, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "MK64: Sherbet Land", DR_MINIGAME_4P, 0x09, 0xFF, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "MK64: Royal Raceway", DR_MINIGAME_4P, 0x0A, 0xFF, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "MK64: N64 Bowser's Castle", DR_MINIGAME_4P, 0x0B, 0xFF, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "MK64: D.K.'s Jungle Parkway", DR_MINIGAME_4P, 0x0C, 0xFF, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "MK64: Yoshi Valley", DR_MINIGAME_4P, 0x0D, 0xFF, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "MK64: Banshee Boardwalk", DR_MINIGAME_4P, 0x0E, 0xFF, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "MK64: Rainbow Road", DR_MINIGAME_4P, 0x0F, 0xFF, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { nullptr, DR_MINIGAME_INVALID, 0xFF, 0xFF, DR_NO_QUIRKS, DR_NO_FLAGS },
+};
+
+static const uint8_t MK64_TRACK_ID[] = {
+  0x08, // 0x00 Luigi Raceway
+  0x09, // 0x01 Moo Moo Farm
+  0x06, // 0x02 Koopa Troopa Beach
+  0x0B, // 0x03 Kalimari Desert
+  0x0A, // 0x04 Toad's Turnpike
+  0x05, // 0x05 Frappe Snowland
+  0x01, // 0x06 Choco Mountain
+  0x00, // 0x07 Mario Raceway
+  0x0E, // 0x08 Wario Stadium
+  0x0C, // 0x09 Sherbet Land
+  0x07, // 0x0A Royal Raceway
+  0x02, // 0x0B Bowser's Castle
+  0x12, // 0x0C D.K.'s Jungle Parkway
+  0x04, // 0x0D Yoshi Valley
+  0x03, // 0x0E Banshee Boardwalk
+  0x0D, // 0x0F Rainbow Road
+};
+
+typedef struct
+{
+  dr_character character;
+  unsigned menu_value;
+  unsigned real_value;
+} mk64_character_t;
+
+static const mk64_character_t MK64_CHARACTER_ID[] = {
+  { DR_CHARACTER_MARIO, 0x01, 0x00 },
+  { DR_CHARACTER_LUIGI, 0x02, 0x01 },
+  { DR_CHARACTER_PEACH, 0x03, 0x06 },
+  { DR_CHARACTER_YOSHI, 0x05, 0x02 },
+  { DR_CHARACTER_WARIO, 0x07, 0x05 },
+  { DR_CHARACTER_DONKEY_KONG, 0x06, 0x04 },
+
+  { DR_CHARACTER_DAISY, 0x04, 0x03 }, // Toad
+  { DR_CHARACTER_WALUIGI, 0x08, 0x07 }, // Bowser
+
+  { DR_CHARACTER_TOAD, 0x04, 0x03 }, // Toad
+  { DR_CHARACTER_BOO, 0x06, 0x04 }, // Donkey Kong
+  { DR_CHARACTER_KOOPA_KID, 0x08, 0x07 }, // Bowser
+};
+
+MarioKart64::MarioKart64(QObject *parent)
+  : DrGuestN64(parent)
+{
+  m_retro->init(coreId(), rom());
+
+  /* Y = accelerate and X = item to match MK8 */
+  for (unsigned port = 0; port < 4; port++)
+  {
+    core()->input()->remapButton(port, RETRO_DEVICE_ID_JOYPAD_Y, RETRO_DEVICE_ID_JOYPAD_B);
+    core()->input()->remapButton(port, RETRO_DEVICE_ID_JOYPAD_X, RETRO_DEVICE_ID_JOYPAD_L2);
+  }
+}
+
+void MarioKart64::run()
+{
+  /* Apply the CPU bot-status flags once the game has populated the status words. */
+  if (m_botFlagDelay > 0 && --m_botFlagDelay == 0)
+  {
+    for (unsigned slot = 0; slot < 4; slot++)
+    {
+      const int i = m_slotToIndex[slot];
+      if (i < 0 || m_controlTypes[i] != DR_CONTROL_TYPE_CPU)
+        continue;
+      const size_t addr = MK64_PLAYER_STATUS_ADDR + slot * MK64_PLAYER_STRIDE;
+      int16_t status = 0;
+      if (m_retro->reads16(&status, addr) == DR_OK)
+        m_retro->writes16(static_cast<int16_t>(status | MK64_STATUS_BOT), addr);
+    }
+  }
+
+  if (m_lapsFreezeFrames > 0)
+  {
+    --m_lapsFreezeFrames;
+    for (unsigned i = 0; i < 4; i++)
+      m_retro->writeValue(1, MK64_LAPS[i]);
+  }
+
+  if (m_winnerIndex == -1 && m_minigameActive)
+  {
+    for (unsigned i = 0; i < 4; i++)
+    {
+      int64_t laps;
+      if (m_retro->readValue(&laps, MK64_LAPS[i]) == DR_OK && laps >= 3)
+      {
+        m_winnerIndex = m_slotToIndex[i];
+        finishMinigameInFrames(360);
+        break;
+      }
+    }
+  }
+}
+
+const dr_mp_minigame_t *MarioKart64::minigames() const
+{
+  return MK64_MINIGAMES;
+}
+
+void MarioKart64::doApplyGameData(const DrGameData &data)
+{
+  signed id = data.minigame->minigame_id;
+  startMinigame();
+  m_retro->loadState(state());
+
+  /* Re-armed per race: the cheat lives in the core, not in the savestate. */
+  if (auto *c = core())
+    c->cheatSet(0, true, MK64_CHEAT_MULTIPLAYER_MUSIC);
+
+  m_retro->writeValue(id % 4, MK64_COURSE);
+  m_retro->writeValue(id / 4, MK64_CUP);
+
+  if (id >= 0 && (size_t)id < sizeof(MK64_TRACK_ID) / sizeof(*MK64_TRACK_ID))
+    m_retro->writeValue(MK64_TRACK_ID[id], MK64_TRACK);
+
+  m_lapsFreezeFrames = 300;
+  m_winnerIndex = -1;
+  for (unsigned i = 0; i < 4; i++)
+    m_slotToIndex[i] = -1;
+
+  /* Assign ports first so each player's character lands in the right slot. */
+  for (unsigned i = 0; i < 4; i++)
+  {
+    const dr_player_t &p = data.players[i];
+    m_characters[i] = p.character;
+    m_ports[i] = p.control_port;
+    m_controlTypes[i] = p.control_type;
+    unsigned slot = p.control_port;
+    if (slot < 4)
+      m_slotToIndex[slot] = static_cast<int>(i);
+  }
+
+  for (unsigned i = 0; i < 4; i++)
+  {
+    unsigned slot = m_ports[i];
+    if (slot >= 4)
+      continue;
+    for (const mk64_character_t *c = MK64_CHARACTER_ID;
+         c < MK64_CHARACTER_ID + sizeof(MK64_CHARACTER_ID) / sizeof(*MK64_CHARACTER_ID); c++)
+    {
+      if (c->character == m_characters[i])
+      {
+        m_retro->writeValue(c->menu_value, MK64_MENU_CHAR[slot]);
+        m_retro->writeValue(c->real_value, MK64_REAL_CHAR[slot]);
+        break;
+      }
+    }
+  }
+
+  /* The player status words aren't populated yet right after load; the game overwrites
+   * anything we set here during init. Apply the CPU bot flags 5 seconds later (see run()). */
+  m_botFlagDelay = 300;
+}
+
+dr_minigame_result_t MarioKart64::minigameResult(unsigned index)
+{
+  dr_minigame_result_t result = { 0, 0 };
+
+  if ((int)index == m_winnerIndex)
+    result.coins = 10;
+
+  return result;
+}
+
+/* No difficulty settings */
+/* All minigames are 4P, so no teams */

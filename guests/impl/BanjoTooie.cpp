@@ -1,0 +1,337 @@
+#include "BanjoTooie.h"
+
+#include <QColor>
+#include <QDir>
+#include <QFile>
+#include <QImage>
+#include <QPainter>
+#include <QRetro.h>
+
+static const char *BT_HIRES_DIR =
+  "system/Mupen64plus/hires_texture/BANJO TOOIE/GLideNHQ";
+
+/* CI player-indicator icons shared by the two kickball mini-games, one per in-game
+ * slot (controller port). */
+static const char *BT_PLAYER_ICON_FILES[4] = {
+  "BANJO TOOIE#124F578A#2#1#B17CA06D_ciByRGBA.png",
+  "BANJO TOOIE#EB14DCFF#2#1#870FD8D2_ciByRGBA.png",
+  "BANJO TOOIE#BCF739DC#2#1#789E4EF4_ciByRGBA.png",
+  "BANJO TOOIE#F3AC9DD5#2#1#10841D23_ciByRGBA.png",
+};
+
+/* Dodgems player-indicator icons (same per-slot icon, different textures). */
+static const char *BT_DODGEMS_ICON_FILES[4] = {
+  "BANJO TOOIE#1CC3185F#2#0#380D39B4_ciByRGBA.png",
+  "BANJO TOOIE#3E08CB4E#2#0#C9F51662_ciByRGBA.png",
+  "BANJO TOOIE#E772519A#2#0#2AD2E337_ciByRGBA.png",
+  "BANJO TOOIE#0803CDBC#2#0#4B7E736F_ciByRGBA.png",
+};
+
+/* Packing Room Challenge: the indicator is two textures per slot -- a 64x32 top
+ * and a 40x9 bottom that sits directly under it, offset right by 12px. */
+static const char *BT_PACKING_TOP_FILES[4] = {
+  "BANJO TOOIE#1E2DDE58#2#1#32E49D27_ciByRGBA.png",
+  "BANJO TOOIE#DF3F9E54#2#1#F9284F0F_ciByRGBA.png",
+  "BANJO TOOIE#F649DEC8#2#1#181BD64A_ciByRGBA.png",
+  "BANJO TOOIE#1DFDABB4#2#1#404435BD_ciByRGBA.png",
+};
+static const char *BT_PACKING_BOTTOM_FILES[4] = {
+  "BANJO TOOIE#FB25B668#2#1#81BA6FA3_ciByRGBA.png",
+  "BANJO TOOIE#4F9993BB#2#1#0CEB7241_ciByRGBA.png",
+  "BANJO TOOIE#37A72EAC#2#1#D5E5B93F_ciByRGBA.png",
+  "BANJO TOOIE#239E71D0#2#1#404435BD_ciByRGBA.png",
+};
+
+/* The native icon texture is 32x32; inject at an exact integer multiple of that
+ * (2x here) so GLideN64 accepts the replacement. */
+static const int BT_ICON_W = 64;
+static const int BT_ICON_H = 64;
+
+/* Per-slot outline colors: P1 blue, P2 red, P3 yellow, P4 purple. */
+static const QColor BT_SLOT_COLORS[4] = {
+  QColor(0x33, 0x66, 0xFF),
+  QColor(0xE2, 0x2B, 0x2B),
+  QColor(0xF2, 0xC5, 0x1D),
+  QColor(0x9B, 0x51, 0xE0),
+};
+
+/* Packing Room uses its own per-slot colors: brown, blue, green, yellow. */
+static const QColor BT_PACKING_COLORS[4] = {
+  QColor(0x8B, 0x5A, 0x2B),
+  QColor(0x33, 0x66, 0xFF),
+  QColor(0x3A, 0xA8, 0x3A),
+  QColor(0xF2, 0xC5, 0x1D),
+};
+
+/* Thickness (in injected pixels) of the colored outline around the head. */
+static const int BT_OUTLINE = 3;
+
+/* Loads srcPath, scales the head to fit within w x h (leaving room for the
+ * outline), then draws a solid colored outline hugging its silhouette. Returns a
+ * null image if the source is missing. */
+static QImage btOutlinedIcon(const QString &srcPath, int w, int h, const QColor &color)
+{
+  QImage art(srcPath);
+  if (art.isNull())
+    return QImage();
+
+  const QImage head = art.scaled(
+    w - 2 * BT_OUTLINE, h - 2 * BT_OUTLINE, Qt::KeepAspectRatio, Qt::FastTransformation);
+
+  /* A solid-color copy of the head shape (color wherever the head is opaque). */
+  QImage silhouette(head.size(), QImage::Format_ARGB32);
+  silhouette.fill(Qt::transparent);
+  {
+    QPainter sp(&silhouette);
+    sp.drawImage(0, 0, head);
+    sp.setCompositionMode(QPainter::CompositionMode_SourceIn);
+    sp.fillRect(silhouette.rect(), color);
+  }
+
+  QImage icon(w, h, QImage::Format_ARGB32);
+  icon.fill(Qt::transparent);
+  QPainter p(&icon);
+  const int hx = (w - head.width()) / 2;
+  const int hy = (h - head.height()) / 2;
+  /* Stamp the silhouette all around the head to grow a solid outline, then the
+   * head itself on top. */
+  for (int dy = -BT_OUTLINE; dy <= BT_OUTLINE; dy++)
+    for (int dx = -BT_OUTLINE; dx <= BT_OUTLINE; dx++)
+      if (dx || dy)
+        p.drawImage(hx + dx, hy + dy, silhouette);
+  p.drawImage(hx, hy, head);
+  return icon;
+}
+
+// s16 per-player score
+static const dr_value_t BT_SCORE[4] = {
+  { 0x8012778C, DR_VALUE_TYPE_S16 },
+  { 0x8012778E, DR_VALUE_TYPE_S16 },
+  { 0x80127790, DR_VALUE_TYPE_S16 },
+  { 0x80127792, DR_VALUE_TYPE_S16 }
+};
+
+// Two consecutive heap pointers the mini-game allocates while running. We wait
+// for them to become non-null (the game has started), then treat them going
+// null again as the mini-game being over.
+static const dr_value_t BT_HEAP_PTR[2] = {
+  { 0x80127730, DR_VALUE_TYPE_POINTER },
+  { 0x80127734, DR_VALUE_TYPE_POINTER }
+};
+
+/// @warning If the state data changes this needs to be updated, it's heap-allocated -mgmt
+static const dr_value_t BT_MINIGAME_ID = { 0x80191646, DR_VALUE_TYPE_U16 };
+
+typedef enum
+{
+  BT_MINIGAME_TARGITZANS_TEMPLE_SHOOTOUT = 0,
+  BT_MINIGAME_MAYAN_KICKBALL_CHALLENGE = 1,
+  BT_MINIGAME_ORDINANCE_STORAGE_SHOOTOUT = 2,
+  BT_MINIGAME_DODGEMS_CHALLENGE = 3,
+  BT_MINIGAME_HOOP_HURRY_CHALLENGE = 4,
+  BT_MINIGAME_BALLOON_BURST_CHALLENGE = 5,
+  BT_MINIGAME_MINI_SUB_SHOOTOUT = 6,
+  BT_MINIGAME_CHOMPAS_BELLY_CHALLENGE = 7,
+  BT_MINIGAME_CLINKERS_CAVERN_SHOOTOUT = 8,
+  BT_MINIGAME_PACKING_ROOM_CHALLENGE = 9,
+  BT_MINIGAME_COLOSSEUM_KICKBALL_CHALLENGE = 10,
+  BT_MINIGAME_TRASH_CAN_CHALLENGE = 11,
+  BT_MINIGAME_ZUBBAS_NEST_SHOOTOUT = 12,
+  BT_MINIGAME_TOWER_OF_TRAGEDY_QUIZ = 13,
+} banjotooie_minigame_id;
+
+static const dr_mp_minigame_t BT_MINIGAMES[] = {
+  // { "Targitzan's Temple Shootout", DR_MINIGAME_4P, BT_MINIGAME_TARGITZANS_TEMPLE_SHOOTOUT, 0xFF, DR_NO_QUIRKS },
+  { "Mayan Kickball Challenge", DR_MINIGAME_4P, BT_MINIGAME_MAYAN_KICKBALL_CHALLENGE, 0xFF, DR_NO_QUIRKS, DR_NO_FLAGS },
+  // { "Ordinance Storage Shootout", DR_MINIGAME_4P, BT_MINIGAME_ORDINANCE_STORAGE_SHOOTOUT, 0xFF, DR_NO_QUIRKS },
+  { "Dodgems Challenge", DR_MINIGAME_4P, BT_MINIGAME_DODGEMS_CHALLENGE, 0xFF, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Hoop Hurry Challenge", DR_MINIGAME_4P, BT_MINIGAME_HOOP_HURRY_CHALLENGE, 0xFF, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Balloon Burst Challenge", DR_MINIGAME_4P, BT_MINIGAME_BALLOON_BURST_CHALLENGE, 0xFF, DR_NO_QUIRKS, DR_NO_FLAGS },
+  // { "Mini-Sub Shootout", DR_MINIGAME_4P, BT_MINIGAME_MINI_SUB_SHOOTOUT, 0xFF, DR_NO_QUIRKS },
+  { "Chompa's Belly Challenge", DR_MINIGAME_4P, BT_MINIGAME_CHOMPAS_BELLY_CHALLENGE, 0xFF, DR_NO_QUIRKS, DR_NO_FLAGS },
+  // { "Clinker's Cavern Shootout", DR_MINIGAME_4P, BT_MINIGAME_CLINKERS_CAVERN_SHOOTOUT, 0xFF, DR_NO_QUIRKS },
+  { "Packing Room Challenge", DR_MINIGAME_4P, BT_MINIGAME_PACKING_ROOM_CHALLENGE, 0xFF, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Colosseum Kickball Challenge", DR_MINIGAME_4P, BT_MINIGAME_COLOSSEUM_KICKBALL_CHALLENGE, 0xFF, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Trash Can Challenge", DR_MINIGAME_4P, BT_MINIGAME_TRASH_CAN_CHALLENGE, 0xFF, DR_NO_QUIRKS, DR_NO_FLAGS },
+  // { "Zubba's Nest Shootout", DR_MINIGAME_4P, BT_MINIGAME_ZUBBAS_NEST_SHOOTOUT, 0xFF, DR_NO_QUIRKS },
+  // { "Tower of Tragedy Quiz", DR_MINIGAME_4P, BT_MINIGAME_TOWER_OF_TRAGEDY_QUIZ, 0xFF, DR_NO_QUIRKS },
+  { nullptr, DR_MINIGAME_INVALID, 0xFF, 0xFF, DR_NO_QUIRKS, DR_NO_FLAGS },
+};
+
+BanjoTooie::BanjoTooie(QObject *parent)
+  : DrGuestN64(parent)
+{
+  /* Content is loaded on the first launch so the per-character hires icons can be
+   * laid down (onBeforeBoot) before GLideN64 scans them. */
+  m_retro->init(coreId(), rom());
+}
+
+void BanjoTooie::run()
+{
+  /* A few frames after the write, force a P1 A press to confirm the menu, then
+   * release it shortly after so it reads as a discrete press. */
+  if (m_aPressDelay > 0 && --m_aPressDelay == 0)
+  {
+    core()->input()->joypads()[0].setForcedButton(RETRO_DEVICE_ID_JOYPAD_A, true);
+    m_aReleaseDelay = 8;
+  }
+  else if (m_aReleaseDelay > 0 && --m_aReleaseDelay == 0)
+  {
+    core()->input()->joypads()[0].setForcedButton(RETRO_DEVICE_ID_JOYPAD_A, false);
+  }
+
+  if (finishPending())
+    return;
+
+  if (!m_stateLoaded)
+    return;
+
+  /* The mini-game allocates a pair of heap objects when it actually starts. Keep
+   * the loading overlay up and the core muted until both are populated, then start
+   * the mini-game -- startMinigame() drops the overlay and unmutes. When they clear
+   * again, the mini-game is over. */
+  int64_t ptr[2] = {};
+  bool ok = m_retro->readValue(&ptr[0], BT_HEAP_PTR[0]) == DR_OK
+    && m_retro->readValue(&ptr[1], BT_HEAP_PTR[1]) == DR_OK;
+  if (!ok)
+    return;
+
+  if (!m_pointersSeen)
+  {
+    if (ptr[0] && ptr[1])
+    {
+      m_pointersSeen = true;
+      startMinigame();
+    }
+  }
+  else if (!ptr[0] && !ptr[1])
+  {
+    int64_t score[4] = {};
+    for (unsigned i = 0; i < 4; i++)
+      m_retro->readValue(&score[i], BT_SCORE[i]);
+    log(DR_LOG_INFO, qPrintable(QString("BT final scores (by port): %1, %2, %3, %4")
+                       .arg(score[0]).arg(score[1]).arg(score[2]).arg(score[3])));
+    finishMinigame();
+  }
+}
+
+const dr_mp_minigame_t *BanjoTooie::minigames() const
+{
+  return BT_MINIGAMES;
+}
+
+unsigned BanjoTooie::computeWinners()
+{
+  int64_t score[4] = {};
+  for (unsigned i = 0; i < 4; i++)
+    m_retro->readValue(&score[i], BT_SCORE[i]);
+
+  /* Colosseum Kickball is scored in reverse: the lowest score wins. */
+  const bool lowestWins =
+    m_minigame && m_minigame->minigame_id == BT_MINIGAME_COLOSSEUM_KICKBALL_CHALLENGE;
+
+  unsigned winners = 0;
+  /* Scores are indexed by in-game slot (controller port); map the winning slot(s)
+   * back to the board player index. */
+  if (lowestWins)
+  {
+    int16_t best = score[0];
+    for (unsigned i = 1; i < 4; i++)
+      if (score[i] < best)
+        best = score[i];
+    for (unsigned slot = 0; slot < 4; slot++)
+      if (score[slot] == best)
+        winners |= (1u << m_slotToIndex[slot]);
+  }
+  else
+  {
+    int16_t best = 0;
+    for (unsigned i = 0; i < 4; i++)
+      if (score[i] > best)
+        best = score[i];
+    if (best > 0)
+      for (unsigned slot = 0; slot < 4; slot++)
+        if (score[slot] == best)
+          winners |= (1u << m_slotToIndex[slot]);
+  }
+  return winners;
+}
+
+void BanjoTooie::writePlayerIcon(unsigned slot, dr_character character)
+{
+  if (slot >= 4)
+    return;
+
+  /* Implant the character's face over each mini-game's player-indicator textures via
+   * GLideN64's hi-res texture pack (replacing the whole CI texture with our RGBA). */
+  const int c = static_cast<int>(character);
+  const QString destDir = QString::fromUtf8(BT_HIRES_DIR);
+  QDir().mkpath(destDir);
+  const QString src = dr_player_icon_32px(m_hostPlatform, character);
+
+  auto saveTo = [&](const QImage &img, const char *file) {
+    if (img.isNull())
+      return;
+    const QString dest = destDir + "/" + QString::fromUtf8(file);
+    if (!img.save(dest, "PNG"))
+      log(DR_LOG_WARN, qPrintable(QString("failed to write %1").arg(dest)));
+  };
+
+  /* Kickball + dodgems: one outlined icon (blue/red/yellow/purple). */
+  const QImage icon = btOutlinedIcon(src, BT_ICON_W, BT_ICON_H, BT_SLOT_COLORS[slot]);
+  if (icon.isNull())
+    log(DR_LOG_WARN, qPrintable(QString("no 32px player icon for character %1").arg(c)));
+  saveTo(icon, BT_PLAYER_ICON_FILES[slot]);
+  saveTo(icon, BT_DODGEMS_ICON_FILES[slot]);
+
+  /* Packing Room: render the outlined head (brown/blue/green/yellow) across the
+   * combined 64x32-over-40x9 shape, then slice it into the two textures. The 40x9
+   * sits directly under the 64x32, offset right by 12px. Injected at 2x native. */
+  const int S = 2;
+  const QImage packing = btOutlinedIcon(src, 64 * S, (32 + 9) * S, BT_PACKING_COLORS[slot]);
+  saveTo(packing.copy(0, 0, 64 * S, 32 * S), BT_PACKING_TOP_FILES[slot]);
+  saveTo(packing.copy(11 * S, 32 * S, 40 * S, 9 * S), BT_PACKING_BOTTOM_FILES[slot]);
+}
+
+/* Pre-boot (every launch): reset per-game state, cache players, and lay down each
+ * slot's kickball icon texture before the core (re)scans it. */
+void BanjoTooie::onBeforeBoot(const DrGameData &data)
+{
+  m_minigameFrames = 0;
+  m_pointersSeen = false;
+  m_stateLoaded = false;
+  m_aPressDelay = 0;
+  m_aReleaseDelay = 0;
+
+  for (unsigned i = 0; i < 4; i++)
+  {
+    m_slotToIndex[i] = i;
+  }
+  for (unsigned i = 0; i < 4; i++)
+  {
+    const unsigned slot = m_players[i].control_port;
+    m_slotToIndex[slot] = i;
+    writePlayerIcon(slot, data.players[i].character);
+  }
+}
+
+/* Post-boot (bootFrames after the first launch): load the state and poke the
+ * selected mini-game; startMinigame() is deferred to run() once the mini-game's
+ * heap objects are populated (keeps the overlay up and the audio muted until then). */
+void BanjoTooie::doApplyGameData(const DrGameData &data)
+{
+  (void)data; /* players cached in onBeforeBoot; m_minigame set by base */
+
+  m_retro->loadState(state());
+
+  uint16_t id = static_cast<uint16_t>(m_minigame ? m_minigame->minigame_id : 0);
+  m_retro->writeValueForFrames(id, BT_MINIGAME_ID, 60);
+  m_aPressDelay = 60;
+  m_stateLoaded = true;
+}
+
+dr_minigame_result_t BanjoTooie::minigameResult(unsigned index)
+{
+  const unsigned winners = computeWinners();
+  return { (winners & (1u << index)) ? 10 : 0, 0 };
+}

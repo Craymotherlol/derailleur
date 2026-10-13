@@ -1,0 +1,46 @@
+#ifndef MARIO_KART_DOUBLE_DASH_H
+#define MARIO_KART_DOUBLE_DASH_H
+
+#include "../DrGuestGcn.h"
+#include <string>
+
+class MarioKartDoubleDash : public DrGuestGcn
+{
+  Q_OBJECT
+
+public:
+  MarioKartDoubleDash(QObject *parent = nullptr);
+
+  const char *name() const override { return "Mario Kart: Double Dash!!"; }
+  dr_guest id() const override { return DR_GUEST_MARIOKARTDOUBLEDASH; }
+  const char *state(void) const override { return "mariokartdoubledash"; }
+
+  const dr_mp_minigame_t *minigames() const override;
+  dr_minigame_result_t minigameResult(unsigned index) override;
+
+protected:
+  void run() override;
+  void doApplyGameData(const DrGameData &data) override;
+
+private:
+  void applyPlayers();
+  void pressA();
+  void advanceSetup();
+  /// Follows the kart pointer chain to `kart`'s mGameStatus field, or 0 if the
+  /// objects aren't allocated yet (before the race starts).
+  size_t kartStatusAddr(unsigned kart);
+
+  int m_minigameFrames = 0;
+  bool m_finishPending = false;
+  bool m_botsApplied = false;
+
+  /* Post-load menu sequence (see doApplyGameData/advanceSetup). */
+  int m_setupStep = 0;
+  int m_stepDelay = 0;
+  int m_aReleaseDelay = 0;
+  int m_cup = 0;
+  int m_track = 0;
+  int m_laps = 1;
+};
+
+#endif

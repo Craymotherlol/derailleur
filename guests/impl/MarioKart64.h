@@ -1,0 +1,36 @@
+#ifndef DR_GUEST_MARIO_KART_64_H
+#define DR_GUEST_MARIO_KART_64_H
+
+#include "../DrGuestN64.h"
+
+class MarioKart64 : public DrGuestN64
+{
+  Q_OBJECT
+
+public:
+  MarioKart64(QObject *parent = nullptr);
+  const char *name() const override { return "Mario Kart 64"; }
+  dr_guest id() const override { return DR_GUEST_MARIOKART64; }
+  dr_core coreId() const override { return DR_CORE_MUPEN64PLUSNEXT; }
+  const char *rom() const override { return "Mario Kart 64 (USA).z64"; }
+  const char *state() const override { return "mariokart64"; }
+
+
+  dr_minigame_result_t minigameResult(unsigned index) override;
+  const dr_mp_minigame_t *minigames() const override;
+  void doApplyGameData(const DrGameData &data) override;
+
+
+private:
+  void run() override;
+  dr_character m_characters[4] = {};
+  unsigned m_ports[4] = { DR_CONTROL_PORT_P1, DR_CONTROL_PORT_P2, DR_CONTROL_PORT_P3,
+    DR_CONTROL_PORT_P4 };
+  dr_control_type m_controlTypes[4] = {};
+  int m_slotToIndex[4] = { -1, -1, -1, -1 };
+  int m_lapsFreezeFrames = 0;
+  int m_winnerIndex = -1;
+  int m_botFlagDelay = -1; // frames after load until the CPU bot-status flags are applied
+};
+
+#endif

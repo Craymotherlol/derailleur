@@ -1,0 +1,49 @@
+#ifndef DR_GUEST_POKEMON_STADIUM_2_H
+#define DR_GUEST_POKEMON_STADIUM_2_H
+
+#include "../DrGuestN64.h"
+
+class PokemonStadium2 : public DrGuestN64
+{
+  Q_OBJECT
+
+public:
+  PokemonStadium2(QObject *parent = nullptr);
+  const char *name() const override { return "Pokemon Stadium 2"; }
+  dr_guest id() const override { return DR_GUEST_POKEMONSTADIUM2; }
+  dr_core coreId() const override { return DR_CORE_MUPEN64PLUSNEXT; }
+  const char *rom() const override { return "Pokemon Stadium 2 (USA).z64"; }
+  const char *state() const override { return "pokemonstadium2"; }
+
+  dr_minigame_result_t minigameResult(unsigned index) override;
+  const dr_mp_minigame_t *minigames() const override;
+
+private:
+  void run() override;
+  void doApplyGameData(const DrGameData &data) override;
+  void onBeforeBoot(const DrGameData &data) override;
+
+  /// Writes the assigned character's icon into this player's hires textures.
+  void writePlayerIcon(unsigned index, dr_character character);
+
+  /// Reads the current minigame's per-player scores and returns a bitmask of the
+  /// winning player(s) (most points, except Topsy-Turvy = reaches 5, Pichu's
+  /// Power Plant = reaches 80, Rampage Rollout = first to count down to 0).
+  unsigned computeWinners();
+
+  /// Per-frame watch for Rampage Rollout: records the order players count their
+  /// score down to 0 (recording starts once everyone is at the initial 9).
+  void trackRampage();
+
+  int m_slotToIndex[4] = { 0, 1, 2, 3 }; // in-game slot -> board player index
+  int m_tempoWatchDelay = 0;    // frames to wait after launch before watching tempo
+  int m_aPressDelay = 0;        // frames after load before forcing a P1 A press (0 = idle)
+  int m_aReleaseDelay = 0;      // frames to hold the forced A before releasing it
+
+  // Rampage Rollout finish tracking (see trackRampage).
+  bool m_rampageRecording = false;
+  int m_rampageCount = 0;              // players that have reached 0 so far
+  int m_rampageOrder[4] = { -1, -1, -1, -1 }; // player indices in finish order
+};
+
+#endif
