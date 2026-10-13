@@ -50,7 +50,7 @@ void put32(unsigned char *p, U32 x)
 Buf read_file(const char *path)
 {
     FILE *f;
-    long len;
+    long len = 0;
     Buf b;
     f = fopen(path, "rb");
     if (!f) { fprintf(stderr, "%s: %s\n", path, strerror(errno)); fail("cannot open input"); }
