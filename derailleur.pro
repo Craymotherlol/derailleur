@@ -109,6 +109,7 @@ SOURCES += \
     guests/impl/SonicShuffle.cpp \
     guests/impl/StarFox64.cpp \
     guests/impl/SuperMarioBros3.cpp \
+    guests/impl/WiiParty.cpp \
     guests/impl/YoshisIsland.cpp \
     main.cpp \
     mainwindow.cpp
@@ -190,6 +191,7 @@ HEADERS += \
     guests/impl/SonicShuffle.h \
     guests/impl/StarFox64.h \
     guests/impl/SuperMarioBros3.h \
+    guests/impl/WiiParty.h \
     guests/impl/YoshisIsland.h \
     mainwindow.h
 
