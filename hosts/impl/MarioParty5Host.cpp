@@ -192,7 +192,7 @@ static const dr_scene_name_t MP5_SCENE_NAMES[] =
   { 0x84, "Tutorial board", false }, // w10dll
   // { 0x85, "w20dll" },
 
-  { -1, nullptr },
+  { -1, nullptr, false },
 };
 
 /* The battle roulette shows its pictures at 256x256 on a white card; Dolphin loads

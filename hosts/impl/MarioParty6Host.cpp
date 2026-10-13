@@ -172,7 +172,7 @@ static const dr_scene_name_t MP6_SCENE_NAMES[] =
   // { 0x70, "" },
   { 0x71, "Mini-Game results", true },
 
-  { -1, nullptr },
+  { -1, nullptr, false },
 };
 
 static DrGcnHostConfig makeConfig(const std::string &game)

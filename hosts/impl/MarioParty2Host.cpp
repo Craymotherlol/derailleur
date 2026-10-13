@@ -153,7 +153,7 @@ static const dr_scene_name_t MP2_SCENE_NAMES[] =
   { 0x71, "Message test", true },
   { 0x72, "Credits", false },
 
-  { -1, nullptr },
+  { -1, nullptr, false },
 };
 
 static DrHostConfig makeConfig(const std::string &game)

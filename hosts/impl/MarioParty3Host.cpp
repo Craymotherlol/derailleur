@@ -293,7 +293,7 @@ static const dr_scene_name_t MP3_SCENE_NAMES[] =
   // { 0x7e, "" },
   { 0x7f, "selmenu", true }, // unused
 
-  { -1, nullptr },
+  { -1, nullptr, false },
 };
 
 static DrHostConfig makeConfig(const std::string &game)

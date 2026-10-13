@@ -169,7 +169,7 @@ static const dr_scene_name_t MP1_SCENE_NAMES[] =
   { 0x82, "Mini-Game Stadium intro", true }, // again?
   { 0x83, "Debug menu", true }, // unused
 
-  { -1, nullptr },
+  { -1, nullptr, false },
 };
 
 static DrHostConfig makeConfig(const std::string &game)

@@ -146,7 +146,7 @@ static const dr_scene_name_t MP4_SCENE_NAMES[] =
   { 0x61, "Mini Board Mad-Dash", false }, // w21dll
   // { 0x62, "ztardll" },
 
-  { -1, nullptr },
+  { -1, nullptr, false },
 };
 
 /* The battle roulette shows two pictures; Dolphin loads replacements for them out
