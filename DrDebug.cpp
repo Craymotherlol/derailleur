@@ -304,31 +304,27 @@ void DrDebug::setPlayers(const std::array<dr_player_t, 4> &players)
 
 void DrDebug::populate(const QList<DrGuest *> &guests)
 {
-  m_groups.clear();
+  m_guests = guests;
   m_guestCombo->clear();
   for (DrGuest *guest : guests)
-    for (const DrMinigameGroup &group : guest->minigameGroups())
-    {
-      m_guestCombo->addItem(QString::fromUtf8(group.name));
-      m_groups.append({ guest, group });
-    }
+    m_guestCombo->addItem(QString::fromUtf8(guest->name()));
   refreshMinis(0);
 }
 
-void DrDebug::refreshMinis(int groupIdx)
+void DrDebug::refreshMinis(int guestIdx)
 {
   m_miniMenu->clear();
   m_entries.clear();
   m_selectedEntry = -1;
   m_miniButton->setText(tr("(no mini-game)"));
-  if (groupIdx < 0 || groupIdx >= m_groups.size())
+  if (guestIdx < 0 || guestIdx >= m_guests.size())
     return;
-  const auto &[guest, group] = m_groups[groupIdx];
+  DrGuest *guest = m_guests[guestIdx];
 
   /* One submenu per mini-game type, created on first use so only the types
-   * present in this group appear. */
+   * present in this guest appear. */
   QHash<int, QMenu *> typeMenus;
-  for (const dr_mp_minigame_t *mg : group.minigames)
+  for (const dr_mp_minigame_t *mg = guest->minigames(); mg && mg->name; mg++)
   {
     const int entryIdx = m_entries.size();
     m_entries.append({ guest, mg });

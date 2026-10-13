@@ -72,7 +72,7 @@ private:
   QLabel *m_teamWarning = nullptr; /* "⚠" shown next to Request when the team split is invalid */
   int m_selectedEntry = -1; /* index into m_entries, or -1 */
   std::array<PlayerControls, 4> m_players{};
-  QList<QPair<DrGuest *, DrMinigameGroup>> m_groups;
+  QList<DrGuest *> m_guests;
   QList<QPair<DrGuest *, const dr_mp_minigame_t *>> m_entries;
 };
 

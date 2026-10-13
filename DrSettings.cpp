@@ -73,20 +73,6 @@ DrSettings::DrSettings(QWidget *parent)
 {
   QVBoxLayout *layout = new QVBoxLayout(this);
 
-  QGroupBox *system = new QGroupBox(tr("System"), this);
-  QVBoxLayout *systemLayout = new QVBoxLayout(system);
-
-  systemLayout->addWidget(settings_checkbox(system,
-    tr("Shared Dolphin core for GameCube games"),
-    tr("Share one Dolphin core across the GameCube games, swapping discs between them,\n"
-       "instead of giving each its own. Uses less memory but relies on the disc-swap\n"
-       "load path."),
-    &dr_settings::shared_gamecube_core));
-  systemLayout->addWidget(settings_note(system,
-    tr("Requires restart of the program. Only enable this if your system is running out "
-       "of memory.")));
-  layout->addWidget(system);
-
   QGroupBox *graphics = new QGroupBox(tr("Graphics"), this);
   QVBoxLayout *graphicsLayout = new QVBoxLayout(graphics);
 

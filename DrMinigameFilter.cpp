@@ -336,26 +336,14 @@ void DrMinigameFilter::restoreLastList(void)
 
 void DrMinigameFilter::populate(const QList<DrGuest *> &guests)
 {
-  QList<QList<DrMinigameGroup>> groupsOf;
   QList<QPair<QString, int>> order;
 
   m_applying = true;
   m_tree->clear();
 
-  /* A guest holding one game is named by that game, not by itself: a single-disc
-   * Dolphin instance calls itself "Dolphin gcn-mp4" while its group carries the
-   * real title. Guests with several games keep their own name as the header. */
   for (int gi = 0; gi < guests.size(); gi++)
-  {
-    const QList<DrMinigameGroup> groups = guests[gi]->minigameGroups();
+    order.append({ QString::fromUtf8(guests[gi]->name()), gi });
 
-    groupsOf.append(groups);
-    order.append({ QString::fromUtf8(
-                     groups.size() == 1 ? groups.first().name : guests[gi]->name()),
-      gi });
-  }
-
-  /* Listed alphabetically; keys come from each group's game id, not its position. */
   std::sort(order.begin(), order.end(),
     [](const QPair<QString, int> &a, const QPair<QString, int> &b) {
       return a.first.compare(b.first, Qt::CaseInsensitive) < 0;
@@ -363,40 +351,24 @@ void DrMinigameFilter::populate(const QList<DrGuest *> &guests)
 
   for (const QPair<QString, int> &entry : order)
   {
-    const int gi = entry.second;
+    DrGuest *guest = guests[entry.second];
 
     auto *guestItem = new QTreeWidgetItem(m_tree);
     guestItem->setText(0, entry.first);
     guestItem->setFlags(guestItem->flags() | Qt::ItemIsAutoTristate | Qt::ItemIsUserCheckable);
     guestItem->setExpanded(false);
 
-    const QList<DrMinigameGroup> &groups = groupsOf[gi];
-    const bool multiGroup = groups.size() > 1;
-
-    for (const DrMinigameGroup &group : groups)
+    for (const dr_mp_minigame_t *mg = guest->minigames(); mg && mg->name; mg++)
     {
-      // For multi-group guests (e.g. Dolphin) add a group header level; the
-      // tristate aggregation propagates through it automatically.
-      QTreeWidgetItem *parent = guestItem;
-      if (multiGroup)
-      {
-        parent = new QTreeWidgetItem(guestItem);
-        parent->setText(0, QString::fromUtf8(group.name));
-        parent->setFlags(parent->flags() | Qt::ItemIsAutoTristate | Qt::ItemIsUserCheckable);
-      }
-
-      for (const dr_mp_minigame_t *mg : group.minigames)
-      {
-        const dr_minigame_key_t key = dr_minigame_key(group.id, mg);
-        auto *leaf = new QTreeWidgetItem(parent);
-        leaf->setText(0, mg->name ? QString::fromUtf8(mg->name) : QString("(unnamed)"));
-        leaf->setFlags((leaf->flags() | Qt::ItemIsUserCheckable) & ~Qt::ItemIsAutoTristate);
-        leaf->setData(0, k_RoleKey, static_cast<qulonglong>(key));
-        leaf->setData(0, k_RoleGameName, QString::fromUtf8(group.name));
-        leaf->setData(0, k_RoleIsLeaf, true);
-        leaf->setData(0, k_RoleType, static_cast<int>(mg->type));
-        leaf->setCheckState(0, Qt::Checked); // default: everything allowed
-      }
+      const dr_minigame_key_t key = dr_minigame_key(guest->id(), mg);
+      auto *leaf = new QTreeWidgetItem(guestItem);
+      leaf->setText(0, QString::fromUtf8(mg->name));
+      leaf->setFlags((leaf->flags() | Qt::ItemIsUserCheckable) & ~Qt::ItemIsAutoTristate);
+      leaf->setData(0, k_RoleKey, static_cast<qulonglong>(key));
+      leaf->setData(0, k_RoleGameName, entry.first);
+      leaf->setData(0, k_RoleIsLeaf, true);
+      leaf->setData(0, k_RoleType, static_cast<int>(mg->type));
+      leaf->setCheckState(0, Qt::Checked);
     }
   }
 

@@ -151,28 +151,24 @@ void DrChallenge::populate(const QList<DrGuest *> &guests)
 
   for (DrGuest *guest : guests)
   {
-    for (const DrMinigameGroup &group : guest->minigameGroups())
+    QTreeWidgetItem *head = new QTreeWidgetItem(m_tree);
+    head->setText(0, QString::fromUtf8(guest->name()));
+    head->setFirstColumnSpanned(true);
+
+    for (const dr_mp_minigame_t *mg = guest->minigames(); mg && mg->name; mg++)
     {
-      QTreeWidgetItem *head = new QTreeWidgetItem(m_tree);
-      head->setText(0, QString::fromUtf8(group.name));
-      head->setFirstColumnSpanned(true);
-
-      for (const dr_mp_minigame_t *mg : group.minigames)
-      {
-        /* Unclassified entries are not offered anywhere else either. */
-        if (!mg->name || mg->type == DR_MINIGAME_INVALID)
-          continue;
-        QTreeWidgetItem *item = new QTreeWidgetItem(head);
-        item->setText(0, QString::fromUtf8(mg->name));
-        item->setData(0, Qt::UserRole, static_cast<int>(m_entries.size()));
-        m_entries.append({ guest, mg });
-      }
-
-      if (head->childCount() == 0)
-        delete head;
-      else
-        head->setExpanded(true);
+      if (mg->type == DR_MINIGAME_INVALID)
+        continue;
+      QTreeWidgetItem *item = new QTreeWidgetItem(head);
+      item->setText(0, QString::fromUtf8(mg->name));
+      item->setData(0, Qt::UserRole, static_cast<int>(m_entries.size()));
+      m_entries.append({ guest, mg });
     }
+
+    if (head->childCount() == 0)
+      delete head;
+    else
+      head->setExpanded(true);
   }
 
   refreshStars();

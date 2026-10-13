@@ -22,48 +22,41 @@ void DrGuestList::add(DrGuest *guest)
     if (guest == m_activeGuest)
       emit minigameFinished();
   });
-  connect(guest, &DrGuest::minigameCanceled, this, [this, guest]() {
-    if (guest == m_activeGuest)
-      emit minigameCanceled();
-  });
 }
 
 DrGuest *DrGuestList::pickMinigame(
   dr_minigame_type type, dr_mic_mode mic, const dr_mp_minigame_t *&outMinigame)
 {
-  struct EligibleGroup
+  struct EligibleGuest
   {
     DrGuest *guest;
-    const char *name;
     QList<const dr_mp_minigame_t *> minigames;
   };
-  QList<EligibleGroup> eligible;
+  QList<EligibleGuest> eligible;
 
   const bool netplay = dr_netplay_active();
 
-  for (int i = 0; i < m_guests.size(); i++)
+  for (DrGuest *guest : m_guests)
   {
-    for (const DrMinigameGroup &group : m_guests[i]->minigameGroups())
+    QList<const dr_mp_minigame_t *> minigames;
+
+    for (const dr_mp_minigame_t *mg = guest->minigames(); mg && mg->name; mg++)
     {
-      QList<const dr_mp_minigame_t *> minigames;
-      for (const dr_mp_minigame_t *mg : group.minigames)
-      {
-        if (mg->type == type && mg->minigame_id != 0xFF
-            && !m_disabled.contains(dr_minigame_key(group.id, mg))
-            && !(netplay && mg->flags.flags.no_netplay)
-            && !(mic == DR_MIC_OFF && mg->flags.flags.mic)
-            && !(mic == DR_MIC_ONLY && !mg->flags.flags.mic))
-          minigames.append(mg);
-      }
-      if (!minigames.isEmpty())
-        eligible.append({ m_guests[i], group.name, minigames });
+      if (mg->type == type && mg->minigame_id != 0xFF
+          && !m_disabled.contains(dr_minigame_key(guest->id(), mg))
+          && !(netplay && mg->flags.flags.no_netplay)
+          && !(mic == DR_MIC_OFF && mg->flags.flags.mic)
+          && !(mic == DR_MIC_ONLY && !mg->flags.flags.mic))
+        minigames.append(mg);
     }
+    if (!minigames.isEmpty())
+      eligible.append({ guest, minigames });
   }
 
   if (eligible.isEmpty())
     return nullptr;
 
-  // Pick a group with equal probability, then a random minigame from that group.
+  /* Each game is equally likely, then each of its mini-games */
   const auto &picked = eligible[dr_rand() % eligible.size()];
   outMinigame = picked.minigames[dr_rand() % picked.minigames.size()];
 
@@ -153,10 +146,9 @@ bool DrGuestList::guestHasCandidate(DrGuest *guest) const
   if (!m_guests.contains(guest))
     return false;
 
-  for (const DrMinigameGroup &group : guest->minigameGroups())
-    for (const dr_mp_minigame_t *mg : group.minigames)
-      if (mg->minigame_id != 0xFF && !m_disabled.contains(dr_minigame_key(group.id, mg)))
-        return true;
+  for (const dr_mp_minigame_t *mg = guest->minigames(); mg && mg->name; mg++)
+    if (mg->minigame_id != 0xFF && !m_disabled.contains(dr_minigame_key(guest->id(), mg)))
+      return true;
   return false;
 }
 
@@ -168,15 +160,12 @@ void DrGuestList::logSummary()
 
   for (DrGuest *guest : m_guests)
   {
-    for (const DrMinigameGroup &group : guest->minigameGroups())
+    gameNames.append(QString::fromUtf8(guest->name()));
+    for (const dr_mp_minigame_t *mg = guest->minigames(); mg && mg->name; mg++)
     {
-      gameNames.append(QString::fromUtf8(group.name));
-      for (const dr_mp_minigame_t *mg : group.minigames)
-      {
-        if (mg->type < DR_MINIGAME_SIZE)
-          typeCounts[mg->type]++;
-        total++;
-      }
+      if (mg->type < DR_MINIGAME_SIZE)
+        typeCounts[mg->type]++;
+      total++;
     }
   }
 
