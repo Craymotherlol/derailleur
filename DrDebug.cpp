@@ -145,7 +145,7 @@ DrDebug::DrDebug(QWidget *parent)
 
     pc.controlPort = new QComboBox(box);
     fillCombo(pc.controlPort, DR_CONTROL_PORT_P1, DR_CONTROL_PORT_SIZE,
-      [](int v) { return QString("P%1").arg(v - DR_CONTROL_PORT_P1 + 1); }, def.control_port);
+      [](int v) { return QString("P%1").arg(v + 1); }, def.control_port);
 
     pc.controlType = new QComboBox(box);
     fillCombo(pc.controlType, DR_CONTROL_TYPE_HUMAN, DR_CONTROL_TYPE_SIZE,
@@ -231,7 +231,7 @@ std::array<dr_player_t, 4> DrDebug::players(const dr_mp_minigame_t *minigame) co
   {
     const PlayerControls &pc = m_players[i];
     players[i].character = dr_character(pc.character->currentData().toInt());
-    players[i].control_port = dr_control_port(pc.controlPort->currentData().toInt());
+    players[i].control_port = static_cast<unsigned>(pc.controlPort->currentData().toInt());
     players[i].control_type = dr_control_type(pc.controlType->currentData().toInt());
     players[i].difficulty = dr_difficulty(pc.difficulty->currentData().toInt());
 

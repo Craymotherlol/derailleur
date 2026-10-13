@@ -339,7 +339,7 @@ std::array<dr_player_t, 4> DrChallenge::buildPlayers(
   {
     players[i].character =
       (i == 0) ? chosen : static_cast<dr_character>(pool.value(static_cast<int>(i) - 1));
-    players[i].control_port = static_cast<dr_control_port>(DR_CONTROL_PORT_P1 + i);
+    players[i].control_port = i;
     players[i].control_type = (i == 0) ? DR_CONTROL_TYPE_HUMAN : DR_CONTROL_TYPE_CPU;
     players[i].difficulty = flat;
     players[i].team_color = DR_TEAM_COLOR_BLUE;

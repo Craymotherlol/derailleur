@@ -7,6 +7,15 @@
 static const char *const DERAILLEUR_DATE_STRING = "October 4, 2026";
 static const char *const DERAILLEUR_RELEASE_STRING = "r12";
 
+#define DR_CONTROL_PORT_P1 0
+#define DR_CONTROL_PORT_P2 1
+#define DR_CONTROL_PORT_P3 2
+#define DR_CONTROL_PORT_P4 3
+#define DR_CONTROL_PORT_SIZE 4
+
+/* Enums */
+
+/* A character, as decided by the board context */
 typedef enum
 {
   DR_CHARACTER_INVALID = 0,
@@ -59,787 +68,6 @@ typedef enum
 
   DR_CHARACTER_SIZE
 } dr_character;
-
-typedef enum
-{
-  DR_CONTROL_PORT_INVALID = 0,
-
-  DR_CONTROL_PORT_P1,
-  DR_CONTROL_PORT_P2,
-  DR_CONTROL_PORT_P3,
-  DR_CONTROL_PORT_P4,
-
-  DR_CONTROL_PORT_SIZE
-} dr_control_port;
-
-typedef enum
-{
-  DR_CONTROL_TYPE_INVALID = 0,
-
-  DR_CONTROL_TYPE_HUMAN,
-  DR_CONTROL_TYPE_CPU,
-
-  DR_CONTROL_TYPE_SIZE
-} dr_control_type;
-
-typedef enum
-{
-  DR_CORE_INVALID = 0,
-
-  /// Mupen64Plus-Next, Nintendo 64 emulator
-  DR_CORE_MUPEN64PLUSNEXT,
-
-  /// Dolphin, GameCube/Wii emulator
-  DR_CORE_DOLPHIN,
-
-  /// mGBA, Game Boy Advance emulator
-  DR_CORE_MGBA,
-
-  /// Flycast, Sega Dreamcast emulator
-  DR_CORE_FLYCAST,
-
-  /// FCEUmm, Nintendo Entertainment System emulator
-  DR_CORE_FCEUMM,
-
-  /// Snes9x, Super Nintendo Entertainment System emulator
-  DR_CORE_SNES9X,
-
-  /// melonDS DS, Nintendo DS emulator
-  DR_CORE_MELONDSDS,
-
-  DR_CORE_SIZE
-} dr_core;
-
-typedef enum
-{
-  DR_DIFFICULTY_INVALID = 0,
-
-  DR_DIFFICULTY_VERY_EASY,
-  DR_DIFFICULTY_EASY,
-  DR_DIFFICULTY_NORMAL,
-  DR_DIFFICULTY_HARD,
-  DR_DIFFICULTY_VERY_HARD,
-
-  DR_DIFFICULTY_SIZE
-} dr_difficulty;
-
-/* Wii Remote control layout a mini-game expects (MP8/MP9), packed into the
- * dolphin quirks below. Up to 8 profiles fit in the 3-bit fields. */
-typedef enum
-{
-  DR_WII_CONTROL_INVALID = 0,      /* no remap (default / upright) */
-  DR_WII_CONTROL_UPRIGHT,          /* held vertically; stick drives d-pad */
-  DR_WII_CONTROL_SIDEWAYS_BUTTONS, /* held horizontally (NES-style) */
-  DR_WII_CONTROL_SIDEWAYS_MOTION,  /* held horizontally with motion */
-  DR_WII_CONTROL_POINTER,          /* IR pointer aiming */
-  DR_WII_CONTROL_WAGGLE,           /* shake: A acts as the shake (R2) input */
-
-  DR_WII_CONTROL_SIZE
-} dr_wii_control;
-
-typedef union
-{
-  /* The bits as a raw integer */
-  unsigned raw;
-
-  struct
-  {
-    unsigned needs_efb_to_texture : 1;
-    unsigned needs_safe_texture_cache : 1;
-    unsigned needs_native_resolution : 1;
-    /* Wii Remote control layout(s); values are dr_wii_control. `control` is the
-     * primary (and solo) layout; `control_team` is the 1v3 trio layout, or 0 to
-     * inherit `control`. 3 bits each -- enough for DR_WII_CONTROL_SIZE profiles. */
-    unsigned control : 3;
-    unsigned control_team : 3;
-  } dolphin;
-
-  struct
-  {
-    unsigned needs_native_boundaries : 1;
-
-    /// mupen64plus-EnableN64DepthCompare=Compatible
-    unsigned needs_depth_compare : 1;
-  } mupen64plus;
-} dr_emulation_quirk_t;
-
-/* Bare raw-bit values, for composing several quirks into one initializer, e.g.
- *   { DR_QUIRK_BITS_EFB_TO_TEXTURE | DR_WII_CONTROL_BITS(DR_WII_CONTROL_POINTER) }
- */
-#define DR_QUIRK_BITS_EFB_TO_TEXTURE 0x1u     // dolphin.needs_efb_to_texture
-#define DR_QUIRK_BITS_SAFE_TEXTURE_CACHE 0x2u // dolphin.needs_safe_texture_cache
-#define DR_QUIRK_BITS_NATIVE_RESOLUTION 0x4u  // dolphin.needs_native_resolution
-#define DR_QUIRK_BITS_NATIVE_BOUNDARIES 0x1u  // mupen64plus.needs_native_boundaries
-#define DR_QUIRK_BITS_DEPTH_COMPARE 0x2u  // mupen64plus.needs_depth_compare
-/* Wii control layout: `control` occupies bits 3-5, `control_team` bits 6-8. */
-#define DR_WII_CONTROL_BITS(primary) ((unsigned)(primary) << 3)
-#define DR_WII_CONTROL_SPLIT_BITS(primary, team) \
-  (((unsigned)(primary) << 3) | ((unsigned)(team) << 6))
-
-/* Ready-made single-quirk initializers. Combine two by OR-ing the *_BITS forms
- * inside your own braces (see the example above). */
-#define DR_NO_QUIRKS { 0u }
-#define DR_QUIRK_EFB_TO_TEXTURE { DR_QUIRK_BITS_EFB_TO_TEXTURE }
-#define DR_QUIRK_SAFE_TEXTURE_CACHE { DR_QUIRK_BITS_SAFE_TEXTURE_CACHE }
-#define DR_QUIRK_NATIVE_RESOLUTION { DR_QUIRK_BITS_NATIVE_RESOLUTION }
-#define DR_QUIRK_NATIVE_BOUNDARIES { DR_QUIRK_BITS_NATIVE_BOUNDARIES }
-#define DR_QUIRK_DEPTH_COMPARE { DR_QUIRK_BITS_DEPTH_COMPARE }
-#define DR_WII_CONTROL(primary) { DR_WII_CONTROL_BITS(primary) }
-#define DR_WII_CONTROL_SPLIT(primary, team) { DR_WII_CONTROL_SPLIT_BITS(primary, team) }
-
-/* NES PPU palette colors. High nibble = luma (dark/medium/light/pale), low nibble
- * = chroma (hue); the $x0 column is gray and $xD-$xF are black. */
-typedef enum
-{
-  /* Grayscale */
-  NES_COLOR_BLACK             = 0x0F,
-  NES_COLOR_DARK_GRAY         = 0x00,
-  NES_COLOR_LIGHT_GRAY        = 0x10, /* silver */
-  NES_COLOR_WHITE             = 0x20,
-  NES_COLOR_PALE_GRAY         = 0x30,
-
-  /* Dark ($0x) -- medium mixed with black */
-  NES_COLOR_DARK_AZURE        = 0x01,
-  NES_COLOR_DARK_BLUE         = 0x02,
-  NES_COLOR_DARK_VIOLET       = 0x03,
-  NES_COLOR_DARK_MAGENTA      = 0x04,
-  NES_COLOR_DARK_ROSE         = 0x05,
-  NES_COLOR_DARK_RED          = 0x06, /* maroon */
-  NES_COLOR_DARK_ORANGE       = 0x07,
-  NES_COLOR_DARK_YELLOW       = 0x08, /* olive */
-  NES_COLOR_DARK_CHARTREUSE   = 0x09,
-  NES_COLOR_DARK_GREEN        = 0x0A,
-  NES_COLOR_DARK_SPRING       = 0x0B,
-  NES_COLOR_DARK_CYAN         = 0x0C,
-
-  /* Medium ($1x) */
-  NES_COLOR_MEDIUM_AZURE      = 0x11,
-  NES_COLOR_MEDIUM_BLUE       = 0x12,
-  NES_COLOR_MEDIUM_VIOLET     = 0x13,
-  NES_COLOR_MEDIUM_MAGENTA    = 0x14,
-  NES_COLOR_MEDIUM_ROSE       = 0x15,
-  NES_COLOR_MEDIUM_RED        = 0x16,
-  NES_COLOR_MEDIUM_ORANGE     = 0x17,
-  NES_COLOR_MEDIUM_YELLOW     = 0x18,
-  NES_COLOR_MEDIUM_CHARTREUSE = 0x19,
-  NES_COLOR_MEDIUM_GREEN      = 0x1A,
-  NES_COLOR_MEDIUM_SPRING     = 0x1B,
-  NES_COLOR_MEDIUM_CYAN       = 0x1C,
-
-  /* Light ($2x) */
-  NES_COLOR_LIGHT_AZURE       = 0x21,
-  NES_COLOR_LIGHT_BLUE        = 0x22,
-  NES_COLOR_LIGHT_VIOLET      = 0x23,
-  NES_COLOR_LIGHT_MAGENTA     = 0x24,
-  NES_COLOR_LIGHT_ROSE        = 0x25,
-  NES_COLOR_LIGHT_RED         = 0x26,
-  NES_COLOR_LIGHT_ORANGE      = 0x27,
-  NES_COLOR_LIGHT_YELLOW      = 0x28,
-  NES_COLOR_LIGHT_CHARTREUSE  = 0x29,
-  NES_COLOR_LIGHT_GREEN       = 0x2A,
-  NES_COLOR_LIGHT_SPRING      = 0x2B,
-  NES_COLOR_LIGHT_CYAN        = 0x2C,
-
-  /* Pale ($3x) -- light mixed with white */
-  NES_COLOR_PALE_AZURE        = 0x31,
-  NES_COLOR_PALE_BLUE         = 0x32,
-  NES_COLOR_PALE_VIOLET       = 0x33,
-  NES_COLOR_PALE_MAGENTA      = 0x34,
-  NES_COLOR_PALE_ROSE         = 0x35,
-  NES_COLOR_PALE_RED          = 0x36,
-  NES_COLOR_PALE_ORANGE       = 0x37,
-  NES_COLOR_PALE_YELLOW       = 0x38,
-  NES_COLOR_PALE_CHARTREUSE   = 0x39,
-  NES_COLOR_PALE_GREEN        = 0x3A,
-  NES_COLOR_PALE_SPRING       = 0x3B,
-  NES_COLOR_PALE_CYAN         = 0x3C
-} nes_color;
-
-typedef enum
-{
-  DR_ENDIANNESS_INVALID = 0,
-
-  DR_ENDIANNESS_LITTLE,
-  DR_ENDIANNESS_BIG,
-
-  /// Mupen64 hack: every 32bit word is flipped and stored as little-endian
-  /// instead of N64 native big-endian. This mode lets the user supply real
-  /// hardware addresses and they will be corrected by the memory interface.
-  DR_ENDIANNESS_WORDFLIPPED,
-
-  DR_ENDIANNESS_SIZE
-} dr_endianness;
-
-/// Per-frame state netplay compares across peers; any difference triggers a hard resync.
-typedef struct
-{
-  uint32_t rng;
-  uint32_t timer;
-} dr_sync_validator_t;
-
-/// The most characters any one game's roster can hold, bounding dr_resolve_characters.
-#define DR_ROSTER_MAX 32
-
-/**
- * One game's answer for a dr_character: the native id to put in a player slot,
- * and whether the game actually has that character.
- *
- * An unsupported character is borrowing somebody else's slot, so its id is only
- * a preference -- dr_resolve_characters hands it to the next free one when the
- * preferred slot is already spoken for.
- */
-typedef struct
-{
-  unsigned id;
-  bool supported;
-} dr_character_id_t;
-
-/// One libretro core option to force, as a { key, value } pair. Tables of these
-/// end in a row with a null key.
-typedef struct
-{
-  const char *key;
-  const char *value;
-} dr_core_option_t;
-
-/**
- * Controller type the Dolphin core puts in each port. These match the core's
- * controller descriptions (see dr_dolphin_controller_desc), since its device ids
- * overlap between the GameCube and Wii lists.
- */
-typedef enum
-{
-  DR_DOLPHIN_CONTROLLER_DEFAULT = 0,
-
-  DR_DOLPHIN_CONTROLLER_GAMECUBE,
-  DR_DOLPHIN_CONTROLLER_WIIMOTE,
-  DR_DOLPHIN_CONTROLLER_WIIMOTE_SIDEWAYS,
-  DR_DOLPHIN_CONTROLLER_WIIMOTE_NUNCHUK,
-  DR_DOLPHIN_CONTROLLER_WIIMOTE_CLASSIC,
-  DR_DOLPHIN_CONTROLLER_WIIMOTE_CLASSIC_PRO,
-
-  DR_DOLPHIN_CONTROLLER_SIZE
-} dr_dolphin_controller;
-
-/// The Dolphin core's description for `type`, or null for the core's default.
-static inline const char *dr_dolphin_controller_desc(dr_dolphin_controller type)
-{
-  switch (type)
-  {
-  case DR_DOLPHIN_CONTROLLER_GAMECUBE:
-    return "GameCube Controller";
-  case DR_DOLPHIN_CONTROLLER_WIIMOTE:
-    return "WiiMote";
-  case DR_DOLPHIN_CONTROLLER_WIIMOTE_SIDEWAYS:
-    return "WiiMote (sideways)";
-  case DR_DOLPHIN_CONTROLLER_WIIMOTE_NUNCHUK:
-    return "WiiMote + Nunchuk";
-  case DR_DOLPHIN_CONTROLLER_WIIMOTE_CLASSIC:
-    return "WiiMote + Classic Controller";
-  case DR_DOLPHIN_CONTROLLER_WIIMOTE_CLASSIC_PRO:
-    return "WiiMote + Classic Controller Pro";
-  default:
-    return nullptr;
-  }
-}
-
-/**
- * Which console family a host game belongs to. The player artwork ships in one
- * set per family (assets/player-32px/n64 and .../gcwii), so a guest drawing the
- * board's players picks the set that matches the host it was launched from.
- */
-typedef enum
-{
-  DR_HOST_PLATFORM_INVALID = 0,
-
-  DR_HOST_PLATFORM_N64,
-  DR_HOST_PLATFORM_GCWII,
-  DR_HOST_PLATFORM_DS,
-
-  DR_HOST_PLATFORM_SIZE
-} dr_host_platform;
-
-/// The art-set directory name for `platform`. Anything but the N64 family uses
-/// the GameCube/Wii set, which is the one that covers every dr_character.
-static inline const char *dr_host_platform_dir(dr_host_platform platform)
-{
-  return platform == DR_HOST_PLATFORM_N64 ? "n64" : "gcwii";
-}
-
-/// Resource path for a player's 32px icon in `platform`'s art set. The N64 set
-/// only draws the characters those games have, so anyone it is missing falls
-/// back to the GameCube/Wii art rather than coming out blank.
-static inline QString dr_player_icon_32px(dr_host_platform platform, dr_character character)
-{
-  const QString path = QString(":/assets/player-32px/%1/%2.png")
-    .arg(QString::fromUtf8(dr_host_platform_dir(platform)))
-    .arg(static_cast<int>(character));
-
-  if (QFile::exists(path))
-    return path;
-
-  return QString(":/assets/player-32px/gcwii/%1.png").arg(static_cast<int>(character));
-}
-
-typedef enum
-{
-  DR_GAME_INVALID = 0,
-
-  DR_GAME_MARIOPARTY1,
-  DR_GAME_MARIOPARTY2,
-  DR_GAME_MARIOPARTY3,
-  DR_GAME_MARIOPARTY4,
-  DR_GAME_MARIOPARTY5,
-  DR_GAME_MARIOPARTY6,
-  DR_GAME_MARIOPARTY7,
-  DR_GAME_MARIOPARTY8,
-  DR_GAME_MARIOPARTYDS,
-  DR_GAME_MARIOPARTY9,
-
-  DR_GAME_SONICSHUFFLE,
-
-  DR_GAME_SIZE
-} dr_game;
-
-typedef enum
-{
-  DR_GUEST_INVALID = 0,
-
-  DR_GUEST_DOLPHIN,
-  DR_GUEST_MARIOPARTY1,
-  DR_GUEST_MARIOPARTY2,
-  DR_GUEST_MARIOPARTY3,
-  DR_GUEST_MARIOPARTY4,
-  DR_GUEST_MARIOPARTY5,
-  DR_GUEST_MARIOPARTY6,
-  DR_GUEST_MARIOPARTY7,
-  DR_GUEST_KIRBYAIRRIDE,
-  DR_GUEST_SMASHREMIX,
-  DR_GUEST_MARIOTENNIS,
-  DR_GUEST_MARIOKART64,
-  DR_GUEST_MARIOPARTYADVANCE,
-  DR_GUEST_MARIOPARTYE,
-  DR_GUEST_MARIOKARTDOUBLEDASH,
-  DR_GUEST_POKEMONSTADIUM2,
-  DR_GUEST_KIRBY64,
-  DR_GUEST_BANJOTOOIE,
-  DR_GUEST_MARIOPARTY9,
-  DR_GUEST_SONICSHUFFLE,
-  DR_GUEST_MARIOPARTY8,
-  DR_GUEST_SUPERMARIOBROS3,
-  DR_GUEST_YOSHISISLAND,
-  DR_GUEST_MARIOGOLF,
-  DR_GUEST_STARFOX64,
-  DR_GUEST_MARIOKARTWII,
-  DR_GUEST_POKEMONSTADIUM,
-
-  DR_GUEST_SIZE
-} dr_guest;
-
-typedef union
-{
-  unsigned raw;
-
-  struct
-  {
-    /// A mini-game with no winners or losers where coins are collected, ie.
-    /// Paratroopa Plunge
-    unsigned lucky : 1;
-
-    /// A mini-game that is disastrous to one or more players, ie.
-    /// Bash 'n' Cash
-    unsigned unlucky : 1;
-
-    /// A mini-game that desyncs on netplay. Hint to reroll it during a
-    /// netplay session.
-    unsigned no_netplay : 1;
-
-    /// A mini-game that does not support bots. Hint to not choose it as a
-    /// candidiate in one-player or zero-player games.
-    unsigned no_bots : 1;
-
-    /// A mini-game that does not support dynamic difficulty
-    unsigned no_difficulty : 1;
-
-    /// A mini-game that uses the GameCube microphone
-    unsigned mic : 1;
-
-    /// A mini-game that relies on controller rumble. Hint to not choose it
-    /// unless all players have rumble-supported controllers.
-    unsigned rumble : 1;
-
-    /// A mini-game that only supports one player. Used as a hint when
-    /// choosing DK or Bowser mini-games.
-    unsigned solo : 1;
-  } flags;
-} dr_minigame_flags_t;
-
-#define DR_FLAG_BITS_LUCKY 0x01u
-#define DR_FLAG_BITS_UNLUCKY 0x02u
-#define DR_FLAG_BITS_NO_NETPLAY 0x04u
-#define DR_FLAG_BITS_NO_BOTS 0x08u
-#define DR_FLAG_BITS_NO_DIFFICULTY 0x10u
-#define DR_FLAG_BITS_MIC 0x20u
-#define DR_FLAG_BITS_RUMBLE 0x40u
-#define DR_FLAG_BITS_SOLO 0x80u
-
-#define DR_NO_FLAGS { 0u }
-#define DR_FLAG_LUCKY { DR_FLAG_BITS_LUCKY }
-#define DR_FLAG_UNLUCKY { DR_FLAG_BITS_UNLUCKY }
-#define DR_FLAG_NO_NETPLAY { DR_FLAG_BITS_NO_NETPLAY }
-#define DR_FLAG_NO_BOTS { DR_FLAG_BITS_NO_BOTS }
-#define DR_FLAG_NO_DIFFICULTY { DR_FLAG_BITS_NO_DIFFICULTY }
-#define DR_FLAG_MIC { DR_FLAG_BITS_MIC }
-#define DR_FLAG_RUMBLE { DR_FLAG_BITS_RUMBLE }
-#define DR_FLAG_SOLO { DR_FLAG_BITS_SOLO }
-
-typedef enum
-{
-  DR_TEAM_COLOR_INVALID = 0,
-
-  DR_TEAM_COLOR_BLUE,
-  DR_TEAM_COLOR_RED,
-  DR_TEAM_COLOR_YELLOW,
-  DR_TEAM_COLOR_GREEN,
-
-  DR_TEAM_COLOR_SIZE
-} dr_team_color;
-
-typedef enum
-{
-  DR_TEAM_TYPE_INVALID = 0,
-
-  DR_TEAM_TYPE_4P,
-  DR_TEAM_TYPE_2V2,
-  DR_TEAM_TYPE_1V3_SOLO,
-  DR_TEAM_TYPE_1V3_GROUP,
-
-  /* Entirely solo -- used for 1P mini-games, item games, etc. */
-  DR_TEAM_TYPE_SOLO,
-
-  /* Duel-board roles: the two duelists -- the initiator who landed on the duel
-   * space and the target they challenged -- plus the bystanders who don't play. */
-  DR_TEAM_TYPE_DUEL_TARGET,
-  DR_TEAM_TYPE_DUEL_INITIATOR,
-  DR_TEAM_TYPE_DUEL_NONPARTICIPANT,
-
-  DR_TEAM_TYPE_SIZE
-} dr_team_type;
-
-/// True if a player with this team type actually plays the mini-game, as opposed
-/// to a bystander: an unfilled/spectator slot (INVALID) or a duel nonparticipant.
-static inline bool dr_team_type_participates(dr_team_type type)
-{
-  return type != DR_TEAM_TYPE_INVALID && type != DR_TEAM_TYPE_DUEL_NONPARTICIPANT;
-}
-
-typedef enum
-{
-  DR_VALUE_TYPE_INVALID = 0,
-
-  DR_VALUE_TYPE_S8,
-  DR_VALUE_TYPE_U8,
-  DR_VALUE_TYPE_S16,
-  DR_VALUE_TYPE_U16,
-  DR_VALUE_TYPE_S32,
-  DR_VALUE_TYPE_U32,
-  DR_VALUE_TYPE_S64,
-  DR_VALUE_TYPE_U64,
-  DR_VALUE_TYPE_FLOAT,
-  DR_VALUE_TYPE_DOUBLE,
-  DR_VALUE_TYPE_POINTER,
-
-  DR_VALUE_TYPE_SIZE
-} dr_value_type;
-
-typedef struct
-{
-  size_t address;
-  dr_value_type type;
-} dr_value_t;
-
-static inline unsigned dr_value_type_size(dr_value_type type)
-{
-  switch (type)
-  {
-  case DR_VALUE_TYPE_S8:
-  case DR_VALUE_TYPE_U8:
-    return 1;
-  case DR_VALUE_TYPE_S16:
-  case DR_VALUE_TYPE_U16:
-    return 2;
-  case DR_VALUE_TYPE_S32:
-  case DR_VALUE_TYPE_U32:
-  case DR_VALUE_TYPE_FLOAT:
-  case DR_VALUE_TYPE_POINTER:
-    return 4;
-  case DR_VALUE_TYPE_S64:
-  case DR_VALUE_TYPE_U64:
-  case DR_VALUE_TYPE_DOUBLE:
-    return 8;
-  default:
-    return 0;
-  }
-}
-
-typedef struct
-{
-  dr_character character;
-  dr_control_port control_port;
-  dr_control_type control_type;
-  dr_difficulty difficulty;
-  dr_team_color team_color;
-  dr_team_type team_type;
-  unsigned team_id;
-  signed coins; /* current board coins */
-  signed stars; /* current board stars */
-} dr_player_t;
-
-/// In-game slot for a player from their controller port (0 = P1). Mario Party
-/// assigns ports non-linearly, so callers place each player into the slot matching
-/// their port, falling back to `fallback` (usually the board index) when the port
-/// is out of range. Guests with different port rules (Mario Tennis, Smash Remix,
-/// Mario Kart) do NOT use this and keep their own mapping.
-static inline unsigned dr_player_slot(const dr_player_t &p, unsigned fallback)
-{
-  unsigned slot = static_cast<unsigned>(p.control_port - DR_CONTROL_PORT_P1);
-  return slot < 4 ? slot : fallback;
-}
-
-/**
- * Resolves the four players' characters to the native ids to write.
- *
- * Players whose character the game really has come in as themselves and claim
- * that id first. Everyone else takes their preferred stand-in if it is still
- * free, and otherwise the first free id in roster order, so two players never
- * turn up wearing the same face. `roster_size` is how many
- * characters the game has, numbered from 0.
- */
-static inline void dr_resolve_characters(dr_character_id_t (*char_from_dr)(dr_character),
-  const dr_player_t players[4], unsigned roster_size, unsigned out[4])
-{
-  bool taken[DR_ROSTER_MAX] = { false };
-  unsigned i, n;
-
-  if (!char_from_dr || !roster_size)
-    return;
-  else if (roster_size > DR_ROSTER_MAX)
-    roster_size = DR_ROSTER_MAX;
-
-  /* Everyone the game has, first: their id is theirs and nobody may borrow it. */
-  for (i = 0; i < 4; i++)
-  {
-    const dr_character_id_t native = char_from_dr(players[i].character);
-
-    out[i] = native.id;
-    if (native.supported && native.id < roster_size)
-      taken[native.id] = true;
-  }
-
-  for (i = 0; i < 4; i++)
-  {
-    const dr_character_id_t native = char_from_dr(players[i].character);
-
-    /* A slot with nobody in it keeps its fallback and claims nothing, so an
-     * empty seat can't push a real player off their stand-in. */
-    if (native.supported || players[i].character == DR_CHARACTER_INVALID)
-      continue;
-
-    /* Preferred stand-in if it's free, else the first free id in roster order */
-    if (native.id < roster_size && !taken[native.id])
-    {
-      out[i] = native.id;
-      taken[native.id] = true;
-      continue;
-    }
-
-    for (n = 0; n < roster_size; n++)
-    {
-      if (!taken[n])
-      {
-        out[i] = n;
-        taken[n] = true;
-        break;
-      }
-    }
-  }
-}
-
-typedef struct
-{
-  signed coins;
-  signed bonus_coins;
-} dr_minigame_result_t;
-
-typedef enum
-{
-  DR_MINIGAME_INVALID = 0,
-
-  /**
-   * Mini-game where all 4 players are against each other
-   * Used in all games
-   */
-  DR_MINIGAME_4P,
-
-  /**
-   * Mini-game where 1 player is against the other three
-   * Used in all games
-   */
-  DR_MINIGAME_1V3,
-
-  /**
-   * Mini-game where 2 groups of two are against each other
-   * Used in all games
-   */
-  DR_MINIGAME_2V2,
-
-  /**
-   * Mini-game where a single player receives coins
-   * Used in: 1
-   */
-  DR_MINIGAME_1P,
-
-  /**
-   * Slightly longer 4P mini-game which ends in a different results scene
-   * Used in: 2 3
-   */
-  DR_MINIGAME_BATTLE,
-
-  /**
-   * Mini-game where a single player receives an item
-   * Used in: 2 3
-   */
-  DR_MINIGAME_ITEM,
-
-  DR_MINIGAME_DUEL,
-
-  DR_MINIGAME_GAME_GUY,
-
-  /* Board-event mini-games: the ones a Bowser or DK space fires off, rolled from
-   * their own pools rather than the regular roulette. */
-  DR_MINIGAME_BOWSER,
-  DR_MINIGAME_DK,
-
-  /**
-   * A special mini-game that doesn't fit any of the categories and will
-   * probably stay unsupported
-   */
-  DR_MINIGAME_SPECIAL,
-
-  DR_MINIGAME_SIZE
-} dr_minigame_type;
-
-/// What a host wants done about mic mini-games when candidates are rolled. MP6 and
-/// MP7 build separate mic and non-mic roulette lists and say which through
-/// dr_host_state_t::mic, so they ask for one or the other; every other board has
-/// no such split and takes whatever comes.
-typedef enum
-{
-  DR_MIC_ANY = 0, /* mic mini-games are eligible alongside the rest */
-  DR_MIC_OFF,     /* never roll a mic mini-game */
-  DR_MIC_ONLY,    /* roll nothing but mic mini-games */
-
-  DR_MIC_SIZE
-} dr_mic_mode;
-
-typedef struct
-{
-  const char *name;
-  dr_minigame_type type;
-  signed minigame_id;
-  signed scene_id;
-  dr_emulation_quirk_t quirks;
-  dr_minigame_flags_t flags;
-} dr_mp_minigame_t;
-
-/// One entry in a host's scene-name table. Tables are terminated by an entry
-/// whose scene_id is -1 (scene_id is signed so the sentinel can't collide with
-/// any real 0x00-0xFF scene).
-typedef struct
-{
-  int scene_id;
-  const char *name;
-  bool ignore;
-} dr_scene_name_t;
-
-/// Returns the descriptive name for `scene_id` by scanning `scenes` until a
-/// match or the -1 terminator, or nullptr if there is no table or no match.
-static inline const char *dr_scene_name(const dr_scene_name_t *scenes, int scene_id)
-{
-  if (!scenes)
-    return nullptr;
-  for (; scenes->scene_id != -1; scenes++)
-    if (scenes->scene_id == scene_id)
-      return scenes->name;
-  return nullptr;
-}
-
-typedef enum
-{
-  DR_OK = 0,
-
-  DR_ERR_INVALID_PARAMETER,
-  DR_ERR_MEMORY_ACCESS_CORE,
-
-  DR_ERROR_SIZE
-} dr_error;
-
-typedef enum
-{
-  DR_LOG_INFO = 0,
-  DR_LOG_WARN,
-  DR_LOG_ERROR,
-
-  DR_LOG_SIZE
-} dr_log_level;
-
-static inline const char *dr_team_color_name(dr_team_color c)
-{
-  switch (c)
-  {
-  case DR_TEAM_COLOR_BLUE:
-    return "Blue";
-  case DR_TEAM_COLOR_RED:
-    return "Red";
-  case DR_TEAM_COLOR_GREEN:
-    return "Green";
-  case DR_TEAM_COLOR_YELLOW:
-    return "Yellow";
-  default:
-    return "Unknown";
-  }
-}
-
-static inline const char *dr_minigame_type_name(dr_minigame_type t)
-{
-  switch (t)
-  {
-  case DR_MINIGAME_4P:
-    return "4P";
-  case DR_MINIGAME_1V3:
-    return "1v3";
-  case DR_MINIGAME_2V2:
-    return "2v2";
-  case DR_MINIGAME_1P:
-    return "1P";
-  case DR_MINIGAME_BATTLE:
-    return "Battle";
-  case DR_MINIGAME_ITEM:
-    return "Item";
-  case DR_MINIGAME_DUEL:
-    return "Duel";
-  case DR_MINIGAME_GAME_GUY:
-    return "Game Guy";
-  case DR_MINIGAME_BOWSER:
-    return "Bowser";
-  case DR_MINIGAME_DK:
-    return "DK";
-  case DR_MINIGAME_SPECIAL:
-    return "Special";
-  default:
-    return "Unknown";
-  }
-}
 
 static inline const char *dr_character_name(dr_character c)
 {
@@ -916,6 +144,513 @@ static inline const char *dr_character_name(dr_character c)
   }
 }
 
+typedef enum
+{
+  DR_CONTROL_TYPE_INVALID = 0,
+
+  DR_CONTROL_TYPE_HUMAN,
+  DR_CONTROL_TYPE_CPU,
+
+  DR_CONTROL_TYPE_SIZE
+} dr_control_type;
+
+typedef enum
+{
+  DR_CORE_INVALID = 0,
+
+  /// Mupen64Plus-Next, Nintendo 64 emulator
+  DR_CORE_MUPEN64PLUSNEXT,
+
+  /// Dolphin, GameCube/Wii emulator
+  DR_CORE_DOLPHIN,
+
+  /// mGBA, Game Boy Advance emulator
+  DR_CORE_MGBA,
+
+  /// Flycast, Sega Dreamcast emulator
+  DR_CORE_FLYCAST,
+
+  /// FCEUmm, Nintendo Entertainment System emulator
+  DR_CORE_FCEUMM,
+
+  /// Snes9x, Super Nintendo Entertainment System emulator
+  DR_CORE_SNES9X,
+
+  /// melonDS DS, Nintendo DS emulator
+  DR_CORE_MELONDSDS,
+
+  DR_CORE_SIZE
+} dr_core;
+
+/// Display name of a libretro core, e.g. "Mupen64Plus-Next".
+static inline const char *dr_core_name(dr_core core)
+{
+  switch (core)
+  {
+  case DR_CORE_MUPEN64PLUSNEXT:
+    return "Mupen64Plus-Next";
+  case DR_CORE_DOLPHIN:
+    return "Dolphin";
+  case DR_CORE_MGBA:
+    return "mGBA";
+  case DR_CORE_FLYCAST:
+    return "Flycast";
+  case DR_CORE_FCEUMM:
+    return "FCEUmm";
+  case DR_CORE_SNES9X:
+    return "Snes9x";
+  case DR_CORE_MELONDSDS:
+    return "melonDS DS";
+  default:
+    return "Unknown";
+  }
+}
+
+typedef enum
+{
+  DR_DIFFICULTY_INVALID = 0,
+
+  DR_DIFFICULTY_VERY_EASY,
+  DR_DIFFICULTY_EASY,
+  DR_DIFFICULTY_NORMAL,
+  DR_DIFFICULTY_HARD,
+  DR_DIFFICULTY_VERY_HARD,
+
+  DR_DIFFICULTY_SIZE
+} dr_difficulty;
+
+static inline const char *dr_difficulty_name(dr_difficulty d)
+{
+  switch (d)
+  {
+  case DR_DIFFICULTY_VERY_EASY:
+    return "Very Easy";
+  case DR_DIFFICULTY_EASY:
+    return "Easy";
+  case DR_DIFFICULTY_NORMAL:
+    return "Normal";
+  case DR_DIFFICULTY_HARD:
+    return "Hard";
+  case DR_DIFFICULTY_VERY_HARD:
+    return "Very Hard";
+  default:
+    return "Unknown";
+  }
+}
+
+typedef enum
+{
+  DR_ENDIANNESS_INVALID = 0,
+
+  DR_ENDIANNESS_LITTLE,
+  DR_ENDIANNESS_BIG,
+
+  /// For Mupen64 -- treat every access as a series of 32bit words flipped
+  /// from big to little
+  DR_ENDIANNESS_WORDFLIPPED,
+
+  DR_ENDIANNESS_SIZE
+} dr_endianness;
+
+typedef enum
+{
+  DR_OK = 0,
+
+  DR_ERR_INVALID_PARAMETER,
+  DR_ERR_MEMORY_ACCESS_CORE,
+
+  DR_ERROR_SIZE
+} dr_error;
+
+typedef enum
+{
+  DR_GAME_INVALID = 0,
+
+  DR_GAME_MARIOPARTY1,
+  DR_GAME_MARIOPARTY2,
+  DR_GAME_MARIOPARTY3,
+  DR_GAME_MARIOPARTY4,
+  DR_GAME_MARIOPARTY5,
+  DR_GAME_MARIOPARTY6,
+  DR_GAME_MARIOPARTY7,
+  DR_GAME_MARIOPARTY8,
+  DR_GAME_MARIOPARTYDS,
+  DR_GAME_MARIOPARTY9,
+  DR_GAME_SONICSHUFFLE,
+
+  DR_GAME_SIZE
+} dr_game;
+
+typedef enum
+{
+  DR_GUEST_INVALID = 0,
+
+  DR_GUEST_DOLPHIN,
+  DR_GUEST_MARIOPARTY1,
+  DR_GUEST_MARIOPARTY2,
+  DR_GUEST_MARIOPARTY3,
+  DR_GUEST_MARIOPARTY4,
+  DR_GUEST_MARIOPARTY5,
+  DR_GUEST_MARIOPARTY6,
+  DR_GUEST_MARIOPARTY7,
+  DR_GUEST_KIRBYAIRRIDE,
+  DR_GUEST_SMASHREMIX,
+  DR_GUEST_MARIOTENNIS,
+  DR_GUEST_MARIOKART64,
+  DR_GUEST_MARIOPARTYADVANCE,
+  DR_GUEST_MARIOPARTYE,
+  DR_GUEST_MARIOKARTDOUBLEDASH,
+  DR_GUEST_POKEMONSTADIUM2,
+  DR_GUEST_KIRBY64,
+  DR_GUEST_BANJOTOOIE,
+  DR_GUEST_MARIOPARTY9,
+  DR_GUEST_SONICSHUFFLE,
+  DR_GUEST_MARIOPARTY8,
+  DR_GUEST_SUPERMARIOBROS3,
+  DR_GUEST_YOSHISISLAND,
+  DR_GUEST_MARIOGOLF,
+  DR_GUEST_STARFOX64,
+  DR_GUEST_MARIOKARTWII,
+  DR_GUEST_POKEMONSTADIUM,
+
+  DR_GUEST_SIZE
+} dr_guest;
+
+/**
+ * Which console family a host game belongs to. The player artwork ships in one
+ * set per family (assets/player-32px/n64 and .../gcwii), so a guest drawing the
+ * board's players picks the set that matches the host it was launched from.
+ */
+typedef enum
+{
+  DR_HOST_PLATFORM_INVALID = 0,
+
+  DR_HOST_PLATFORM_N64,
+  DR_HOST_PLATFORM_GCWII,
+  DR_HOST_PLATFORM_DS,
+
+  DR_HOST_PLATFORM_SIZE
+} dr_host_platform;
+
+/// The art-set directory name for `platform`. Anything but the N64 family uses
+/// the GameCube/Wii set, which is the one that covers every dr_character.
+static inline const char *dr_host_platform_dir(dr_host_platform platform)
+{
+  return platform == DR_HOST_PLATFORM_N64 ? "n64" : "gcwii";
+}
+
+/// Resource path for a player's 32px icon in `platform`'s art set. The N64 set
+/// only draws the characters those games have, so anyone it is missing falls
+/// back to the GameCube/Wii art rather than coming out blank.
+static inline QString dr_player_icon_32px(dr_host_platform platform, dr_character character)
+{
+  const QString path = QString(":/assets/player-32px/%1/%2.png")
+    .arg(QString::fromUtf8(dr_host_platform_dir(platform)))
+    .arg(static_cast<int>(character));
+
+  if (QFile::exists(path))
+    return path;
+
+  return QString(":/assets/player-32px/gcwii/%1.png").arg(static_cast<int>(character));
+}
+
+typedef enum
+{
+  DR_LOG_INFO = 0,
+  DR_LOG_WARN,
+  DR_LOG_ERROR,
+
+  DR_LOG_SIZE
+} dr_log_level;
+
+/// What a host wants done about mic mini-games when candidates are rolled. MP6 and
+/// MP7 build separate mic and non-mic roulette lists and say which through
+/// dr_host_state_t::mic, so they ask for one or the other; every other board has
+/// no such split and takes whatever comes.
+typedef enum
+{
+  DR_MIC_ANY = 0, /* mic mini-games are eligible alongside the rest */
+  DR_MIC_OFF,     /* never roll a mic mini-game */
+  DR_MIC_ONLY,    /* roll nothing but mic mini-games */
+
+  DR_MIC_SIZE
+} dr_mic_mode;
+
+typedef enum
+{
+  DR_MINIGAME_INVALID = 0,
+
+  /**
+   * Mini-game where all 4 players are against each other
+   * Used in all games
+   */
+  DR_MINIGAME_4P,
+
+  /**
+   * Mini-game where 1 player is against the other three
+   * Used in all games
+   */
+  DR_MINIGAME_1V3,
+
+  /**
+   * Mini-game where 2 groups of two are against each other
+   * Used in all games
+   */
+  DR_MINIGAME_2V2,
+
+  /**
+   * Mini-game where a single player receives coins
+   * Used in: 1
+   */
+  DR_MINIGAME_1P,
+
+  /**
+   * Slightly longer 4P mini-game which ends in a different results scene
+   * Used in: 2 3
+   */
+  DR_MINIGAME_BATTLE,
+
+  /**
+   * Mini-game where a single player receives an item
+   * Used in: 2 3
+   */
+  DR_MINIGAME_ITEM,
+
+  DR_MINIGAME_DUEL,
+
+  DR_MINIGAME_GAME_GUY,
+
+  /* Board-event mini-games: the ones a Bowser or DK space fires off, rolled from
+   * their own pools rather than the regular roulette. */
+  DR_MINIGAME_BOWSER,
+  DR_MINIGAME_DK,
+
+  /**
+   * A special mini-game that doesn't fit any of the categories and will
+   * probably stay unsupported
+   */
+  DR_MINIGAME_SPECIAL,
+
+  DR_MINIGAME_SIZE
+} dr_minigame_type;
+
+static inline const char *dr_minigame_type_name(dr_minigame_type t)
+{
+  switch (t)
+  {
+  case DR_MINIGAME_4P:
+    return "4P";
+  case DR_MINIGAME_1V3:
+    return "1v3";
+  case DR_MINIGAME_2V2:
+    return "2v2";
+  case DR_MINIGAME_1P:
+    return "1P";
+  case DR_MINIGAME_BATTLE:
+    return "Battle";
+  case DR_MINIGAME_ITEM:
+    return "Item";
+  case DR_MINIGAME_DUEL:
+    return "Duel";
+  case DR_MINIGAME_GAME_GUY:
+    return "Game Guy";
+  case DR_MINIGAME_BOWSER:
+    return "Bowser";
+  case DR_MINIGAME_DK:
+    return "DK";
+  case DR_MINIGAME_SPECIAL:
+    return "Special";
+  default:
+    return "Unknown";
+  }
+}
+
+/// Result coin count for player coming 1st in a `DR_MINIGAME_BATTLE`
+#define DR_MINIGAME_RESULT_BATTLE_1ST 0
+
+/// Result coin count for player coming 2nd in a `DR_MINIGAME_BATTLE`
+#define DR_MINIGAME_RESULT_BATTLE_2ND 1
+
+/// Result coin count for player coming 3rd in a `DR_MINIGAME_BATTLE`
+#define DR_MINIGAME_RESULT_BATTLE_3RD 2
+
+/// Result coin count for player coming 4th in a `DR_MINIGAME_BATTLE`
+#define DR_MINIGAME_RESULT_BATTLE_4TH 3
+
+/// Result coin count for player failing a `DR_MINIGAME_BOWSER`
+#define DR_MINIGAME_RESULT_BOWSER_FAILURE 0
+
+/// Result coin count for player winning a `DR_MINIGAME_BOWSER`
+#define DR_MINIGAME_RESULT_BOWSER_SUCCESS 1
+
+/// Result coin count for player failing a singleplayer `DR_MINIGAME_DK`
+#define DR_MINIGAME_RESULT_DK_FAILURE 0
+
+/// Result coin count for player winning a singleplayer `DR_MINIGAME_DK`
+/// Multiplayer DK games instead return a variable coin count.
+#define DR_MINIGAME_RESULT_DK_SUCCESS 10
+
+typedef enum
+{
+  DR_TEAM_COLOR_INVALID = 0,
+
+  DR_TEAM_COLOR_BLUE,
+  DR_TEAM_COLOR_RED,
+  DR_TEAM_COLOR_YELLOW,
+  DR_TEAM_COLOR_GREEN,
+
+  DR_TEAM_COLOR_SIZE
+} dr_team_color;
+
+static inline const char *dr_team_color_name(dr_team_color c)
+{
+  switch (c)
+  {
+  case DR_TEAM_COLOR_BLUE:
+    return "Blue";
+  case DR_TEAM_COLOR_RED:
+    return "Red";
+  case DR_TEAM_COLOR_GREEN:
+    return "Green";
+  case DR_TEAM_COLOR_YELLOW:
+    return "Yellow";
+  default:
+    return "Unknown";
+  }
+}
+
+typedef enum
+{
+  DR_TEAM_TYPE_INVALID = 0,
+
+  DR_TEAM_TYPE_4P,
+  DR_TEAM_TYPE_2V2,
+  DR_TEAM_TYPE_1V3_SOLO,
+  DR_TEAM_TYPE_1V3_GROUP,
+
+  /* Entirely solo -- used for 1P mini-games, item games, etc. */
+  DR_TEAM_TYPE_SOLO,
+
+  /* Duel-board roles: the two duelists -- the initiator who landed on the duel
+   * space and the target they challenged -- plus the bystanders who don't play. */
+  DR_TEAM_TYPE_DUEL_TARGET,
+  DR_TEAM_TYPE_DUEL_INITIATOR,
+  DR_TEAM_TYPE_DUEL_NONPARTICIPANT,
+
+  DR_TEAM_TYPE_SIZE
+} dr_team_type;
+
+/// Whether a given team type is a mini-game participant
+static inline bool dr_team_type_participates(dr_team_type type)
+{
+  return type != DR_TEAM_TYPE_INVALID && type != DR_TEAM_TYPE_DUEL_NONPARTICIPANT;
+}
+
+typedef enum
+{
+  DR_VALUE_TYPE_INVALID = 0,
+
+  DR_VALUE_TYPE_S8,
+  DR_VALUE_TYPE_U8,
+  DR_VALUE_TYPE_S16,
+  DR_VALUE_TYPE_U16,
+  DR_VALUE_TYPE_S32,
+  DR_VALUE_TYPE_U32,
+  DR_VALUE_TYPE_S64,
+  DR_VALUE_TYPE_U64,
+  DR_VALUE_TYPE_FLOAT,
+  DR_VALUE_TYPE_DOUBLE,
+  DR_VALUE_TYPE_POINTER,
+
+  DR_VALUE_TYPE_SIZE
+} dr_value_type;
+
+static inline unsigned dr_value_type_size(dr_value_type type)
+{
+  switch (type)
+  {
+  case DR_VALUE_TYPE_S8:
+  case DR_VALUE_TYPE_U8:
+    return 1;
+  case DR_VALUE_TYPE_S16:
+  case DR_VALUE_TYPE_U16:
+    return 2;
+  case DR_VALUE_TYPE_S32:
+  case DR_VALUE_TYPE_U32:
+  case DR_VALUE_TYPE_FLOAT:
+  case DR_VALUE_TYPE_POINTER:
+    return 4;
+  case DR_VALUE_TYPE_S64:
+  case DR_VALUE_TYPE_U64:
+  case DR_VALUE_TYPE_DOUBLE:
+    return 8;
+  default:
+    return 0;
+  }
+}
+
+typedef enum
+{
+  DR_WII_CONTROL_INVALID = 0,
+
+  /// Default control profile
+  DR_WII_CONTROL_UPRIGHT,
+
+  /// For games where the Wii Remote is held sideways and only uses buttons
+  /// Left stick -> + Control Pad
+  /// A -> 2, B -> 1
+  /// + Control Pad is rotated 90 degrees
+  DR_WII_CONTROL_SIDEWAYS_BUTTONS,
+  
+  /// For games where the Wii Remote is held sideways and tilted
+  /// Left stick -> Wii Remote tilt
+  /// A -> 2, B -> 1
+  /// Motion axis and + Control Pad are rotates 90 degrees
+  DR_WII_CONTROL_SIDEWAYS_MOTION,
+  
+  /// For games where the player uses IR to point at the screen
+  /// Left stick -> relative IR input
+  DR_WII_CONTROL_POINTER,
+
+  /// For games where the player is just meant to waggle
+  /// A -> R2 (shake)
+  DR_WII_CONTROL_WAGGLE,
+
+  DR_WII_CONTROL_SIZE
+} dr_wii_control;
+
+static inline const char *dr_wii_control_name(dr_wii_control c)
+{
+  switch (c)
+  {
+  case DR_WII_CONTROL_INVALID:
+    return "Default";
+  case DR_WII_CONTROL_UPRIGHT:
+    return "Upright";
+  case DR_WII_CONTROL_SIDEWAYS_BUTTONS:
+    return "Sideways Buttons";
+  case DR_WII_CONTROL_SIDEWAYS_MOTION:
+    return "Sideways Motion";
+  case DR_WII_CONTROL_POINTER:
+    return "Pointer";
+  case DR_WII_CONTROL_WAGGLE:
+    return "Waggle";
+  default:
+    return "Unknown";
+  }
+}
+
+/* Structs and unions */
+
+/// The most characters any one game's roster can hold
+#define DR_ROSTER_MAX 32
+
+typedef struct
+{
+  unsigned id;
+  bool supported;
+} dr_character_id_t;
+
 typedef struct
 {
   unsigned red;
@@ -923,8 +658,7 @@ typedef struct
   unsigned blue;
 } dr_color_t;
 
-/// A representative RGB color for each character, ie. for recoloring per-player
-/// effects in guests.
+/* An RGB color representing a particular character, to recolor assets */
 static inline dr_color_t dr_character_color(dr_character character)
 {
   switch (character)
@@ -1000,55 +734,280 @@ static inline dr_color_t dr_character_color(dr_character character)
   }
 }
 
-static inline const char *dr_difficulty_name(dr_difficulty d)
+/// One libretro core option to force, as a { key, value } pair. Tables of these
+/// end in a row with a null key.
+typedef struct
 {
-  switch (d)
+  const char *key;
+  const char *value;
+} dr_core_option_t;
+
+typedef union
+{
+  /* The bits as a raw integer */
+  unsigned raw;
+
+  struct
   {
-  case DR_DIFFICULTY_VERY_EASY:
-    return "Very Easy";
-  case DR_DIFFICULTY_EASY:
-    return "Easy";
-  case DR_DIFFICULTY_NORMAL:
-    return "Normal";
-  case DR_DIFFICULTY_HARD:
-    return "Hard";
-  case DR_DIFFICULTY_VERY_HARD:
-    return "Very Hard";
-  default:
-    return "Unknown";
+    unsigned needs_efb_to_texture : 1;
+    unsigned needs_safe_texture_cache : 1;
+    unsigned needs_native_resolution : 1;
+    
+    /// The control type used 
+    /// @see dr_wii_control
+    unsigned control : 3;
+
+    /// In 1v3 mini-games, the Wii control type used by the team
+    /// @see dr_wii_control
+    unsigned control_team : 3;
+  } dolphin;
+
+  struct
+  {
+    unsigned needs_native_boundaries : 1;
+
+    /// mupen64plus-EnableN64DepthCompare=Compatible
+    unsigned needs_depth_compare : 1;
+  } mupen64plus;
+} dr_emulation_quirk_t;
+
+static_assert(DR_WII_CONTROL_SIZE < 8,
+  "Wii control profiles need to fit dr_emulation_quirk_t! Increase size?");
+
+#define DR_QUIRK_BITS_EFB_TO_TEXTURE 0x1u // dolphin.needs_efb_to_texture
+#define DR_QUIRK_BITS_SAFE_TEXTURE_CACHE 0x2u // dolphin.needs_safe_texture_cache
+#define DR_QUIRK_BITS_NATIVE_RESOLUTION 0x4u // dolphin.needs_native_resolution
+#define DR_WII_CONTROL_BITS(primary) ((unsigned)(primary) << 3)
+#define DR_WII_CONTROL_SPLIT_BITS(primary, team) \
+  (((unsigned)(primary) << 3) | ((unsigned)(team) << 6))
+
+#define DR_QUIRK_BITS_NATIVE_BOUNDARIES 0x1u // mupen64plus.needs_native_boundaries
+#define DR_QUIRK_BITS_DEPTH_COMPARE 0x2u // mupen64plus.needs_depth_compare
+
+#define DR_NO_QUIRKS { 0u }
+#define DR_QUIRK_EFB_TO_TEXTURE { DR_QUIRK_BITS_EFB_TO_TEXTURE }
+#define DR_QUIRK_SAFE_TEXTURE_CACHE { DR_QUIRK_BITS_SAFE_TEXTURE_CACHE }
+#define DR_QUIRK_NATIVE_RESOLUTION { DR_QUIRK_BITS_NATIVE_RESOLUTION }
+#define DR_QUIRK_NATIVE_BOUNDARIES { DR_QUIRK_BITS_NATIVE_BOUNDARIES }
+#define DR_QUIRK_DEPTH_COMPARE { DR_QUIRK_BITS_DEPTH_COMPARE }
+#define DR_WII_CONTROL(primary) { DR_WII_CONTROL_BITS(primary) }
+#define DR_WII_CONTROL_SPLIT(primary, team) { DR_WII_CONTROL_SPLIT_BITS(primary, team) }
+
+typedef union
+{
+  unsigned raw;
+
+  struct
+  {
+    /// A mini-game with no winners or losers where coins are collected, ie.
+    /// Paratroopa Plunge
+    unsigned lucky : 1;
+
+    /// A mini-game that is disastrous to one or more players, ie.
+    /// Bash 'n' Cash
+    unsigned unlucky : 1;
+
+    /// A mini-game that desyncs on netplay. Hint to reroll it during a
+    /// netplay session.
+    unsigned no_netplay : 1;
+
+    /// A mini-game that does not support bots. Hint to not choose it as a
+    /// candidiate in one-player or zero-player games.
+    unsigned no_bots : 1;
+
+    /// A mini-game that does not support dynamic difficulty
+    unsigned no_difficulty : 1;
+
+    /// A mini-game that uses the GameCube microphone
+    unsigned mic : 1;
+
+    /// A mini-game that relies on controller rumble. Hint to not choose it
+    /// unless all players have rumble-supported controllers.
+    unsigned rumble : 1;
+
+    /// A mini-game that only supports one player. Used as a hint when
+    /// choosing DK or Bowser mini-games.
+    unsigned solo : 1;
+  } flags;
+} dr_minigame_flags_t;
+
+#define DR_FLAG_BITS_LUCKY 0x01u
+#define DR_FLAG_BITS_UNLUCKY 0x02u
+#define DR_FLAG_BITS_NO_NETPLAY 0x04u
+#define DR_FLAG_BITS_NO_BOTS 0x08u
+#define DR_FLAG_BITS_NO_DIFFICULTY 0x10u
+#define DR_FLAG_BITS_MIC 0x20u
+#define DR_FLAG_BITS_RUMBLE 0x40u
+#define DR_FLAG_BITS_SOLO 0x80u
+
+#define DR_NO_FLAGS { 0u }
+#define DR_FLAG_LUCKY { DR_FLAG_BITS_LUCKY }
+#define DR_FLAG_UNLUCKY { DR_FLAG_BITS_UNLUCKY }
+#define DR_FLAG_NO_NETPLAY { DR_FLAG_BITS_NO_NETPLAY }
+#define DR_FLAG_NO_BOTS { DR_FLAG_BITS_NO_BOTS }
+#define DR_FLAG_NO_DIFFICULTY { DR_FLAG_BITS_NO_DIFFICULTY }
+#define DR_FLAG_MIC { DR_FLAG_BITS_MIC }
+#define DR_FLAG_RUMBLE { DR_FLAG_BITS_RUMBLE }
+#define DR_FLAG_SOLO { DR_FLAG_BITS_SOLO }
+
+typedef struct
+{
+  signed coins;
+  signed bonus_coins;
+} dr_minigame_result_t;
+
+typedef struct
+{
+  const char *name;
+  dr_minigame_type type;
+  signed minigame_id;
+  signed scene_id;
+  dr_emulation_quirk_t quirks;
+  dr_minigame_flags_t flags;
+} dr_mp_minigame_t;
+
+/**
+ * A player, as defined by the board context and passed to the guest games
+ */
+typedef struct
+{
+  /// The character this player is represented by in the board context
+  /// @see dr_character
+  dr_character character;
+
+  /// The emulated controller port this player is using (0 = P1)
+  unsigned control_port;
+
+  /// Whether the player is a human or controlled by the CPU
+  /// @see dr_control_type
+  dr_control_type control_type;
+
+  /// The selected difficulty of the player, if CPU-controlled
+  /// @see dr_difficulty
+  dr_difficulty difficulty;
+
+  /// The "team color" received from the board context, if available
+  /// ie. whether this team is grouped because its players landed on blue or
+  /// red spaces
+  /// @see dr_team_color
+  dr_team_color team_color;
+
+  /// The type of team this player is on for the mini-game
+  /// @see dr_team_type
+  dr_team_type team_type;
+
+  /// The raw "team ID" received from the board context. This could mean
+  /// anything, so generally it is preferable to use `team_type` instead.
+  unsigned team_id;
+
+  /// The number of coins the player has in the board context
+  signed coins;
+
+  /// The number of stars the player has in the board context
+  signed stars;
+} dr_player_t;
+
+/**
+ * Resolves the four players' characters to the native ids to write.
+ *
+ * Players whose character the game really has come in as themselves and claim
+ * that id first. Everyone else takes their preferred stand-in if it is still
+ * free, and otherwise the first free id in roster order, so two players never
+ * turn up wearing the same face. `roster_size` is how many
+ * characters the game has, numbered from 0.
+ */
+static inline void dr_resolve_characters(dr_character_id_t (*char_from_dr)(dr_character),
+  const dr_player_t players[4], unsigned roster_size, unsigned out[4])
+{
+  bool taken[DR_ROSTER_MAX] = { false };
+  unsigned i, n;
+
+  if (!char_from_dr || !roster_size)
+    return;
+  else if (roster_size > DR_ROSTER_MAX)
+    roster_size = DR_ROSTER_MAX;
+
+  /* Everyone the game has, first: their id is theirs and nobody may borrow it. */
+  for (i = 0; i < 4; i++)
+  {
+    const dr_character_id_t native = char_from_dr(players[i].character);
+
+    out[i] = native.id;
+    if (native.supported && native.id < roster_size)
+      taken[native.id] = true;
+  }
+
+  for (i = 0; i < 4; i++)
+  {
+    const dr_character_id_t native = char_from_dr(players[i].character);
+
+    /* A slot with nobody in it keeps its fallback and claims nothing, so an
+     * empty seat can't push a real player off their stand-in. */
+    if (native.supported || players[i].character == DR_CHARACTER_INVALID)
+      continue;
+
+    /* Preferred stand-in if it's free, else the first free id in roster order */
+    if (native.id < roster_size && !taken[native.id])
+    {
+      out[i] = native.id;
+      taken[native.id] = true;
+      continue;
+    }
+
+    for (n = 0; n < roster_size; n++)
+    {
+      if (!taken[n])
+      {
+        out[i] = n;
+        taken[n] = true;
+        break;
+      }
+    }
   }
 }
 
-static inline const char *dr_wii_control_name(dr_wii_control c)
+/// One entry in a host's scene-name table. Tables are terminated by an entry
+/// whose scene_id is -1 (scene_id is signed so the sentinel can't collide with
+/// any real 0x00-0xFF scene).
+typedef struct
 {
-  switch (c)
-  {
-  case DR_WII_CONTROL_INVALID:
-    return "Default";
-  case DR_WII_CONTROL_UPRIGHT:
-    return "Upright";
-  case DR_WII_CONTROL_SIDEWAYS_BUTTONS:
-    return "Sideways Buttons";
-  case DR_WII_CONTROL_SIDEWAYS_MOTION:
-    return "Sideways Motion";
-  case DR_WII_CONTROL_POINTER:
-    return "Pointer";
-  case DR_WII_CONTROL_WAGGLE:
-    return "Waggle";
-  default:
-    return "Unknown";
-  }
+  int scene_id;
+  const char *name;
+  bool ignore;
+} dr_scene_name_t;
+
+/// Returns the descriptive name for `scene_id` by scanning `scenes` until a
+/// match or the -1 terminator, or nullptr if there is no table or no match.
+static inline const char *dr_scene_name(const dr_scene_name_t *scenes, int scene_id)
+{
+  if (!scenes)
+    return nullptr;
+  for (; scenes->scene_id != -1; scenes++)
+    if (scenes->scene_id == scene_id)
+      return scenes->name;
+  return nullptr;
 }
+
+/// Per-frame emulator state to check for desyncs
+typedef struct
+{
+  /// The current state of the rng seed
+  uint32_t rng;
+
+  /// Any relevant free-running timer
+  uint32_t timer;
+} dr_sync_validator_t;
+
+typedef struct
+{
+  size_t address;
+  dr_value_type type;
+} dr_value_t;
 
 /// Global, user-facing settings (persisted to derailleur.ini). Access the single
 /// instance through dr_settings_get(); load once at startup and save on change.
 struct dr_settings
 {
-  /// Share a single Dolphin core across the GameCube games (hot-swapping discs)
-  /// instead of giving each its own instance. Off by default (separate instances);
-  /// only worth enabling to save memory. Takes effect at startup.
-  bool shared_gamecube_core = false;
-
   /// Show the loading overlay (frozen frame + bouncing icon, see DrOverlay) that
   /// covers core swaps. On by default; turning it off shows the raw swap instead.
   bool loading_overlay = true;
