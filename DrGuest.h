@@ -2,7 +2,6 @@
 #define DR_GUEST_H
 
 #include "DrCommon.h"
-#include "DrRetro.h"
 #include <cstdio>
 #include <string>
 #include <QByteArray>
@@ -12,12 +11,7 @@
 #include <QString>
 #include <QWidget>
 
-struct DrMinigameGroup
-{
-  const char *name;
-  dr_guest id = DR_GUEST_INVALID;
-  QList<const dr_mp_minigame_t *> minigames;
-};
+class QRetro;
 
 /* Stable mini-game filter key: game, type, scene_id and minigame_id packed together. */
 typedef quint64 dr_minigame_key_t;
@@ -62,67 +56,16 @@ public:
   {
   }
 
-  virtual QRetro *core() const { return m_retro ? m_retro->core() : nullptr; }
-  virtual bool isValid() const { return m_valid && (!m_retro || m_retro->isValid()); }
-  virtual unsigned warmupFrames() const { return 30; }
+  /// The guest's libretro core, or null for a guest that isn't libretro-powered.
+  virtual QRetro *core() const { return nullptr; }
+  virtual bool isValid() const { return m_valid; }
 
-  /// Whether this guest is booted and warmed up at startup. Guests that defer
-  /// loading their content until launch (the common case) return false so they
-  /// are neither started nor added to the warmup queue; the base then boots them
-  /// on first launch (see applyGameData). Only cores that must be set up ahead of
-  /// time (e.g. the shared Dolphin core, for state/disc swaps) keep this true.
-  virtual bool usesWarmup() const { return true; }
+  virtual void pause() {}
+  virtual void unpause() {}
+  virtual QWidget *createWidget(QWidget *parent) { (void)parent; return nullptr; }
 
-  /// Content path a deferred guest loads on its first launch. Ignored by warmed
-  /// guests (usesWarmup() == true). Defaults to the core's own game path (set via
-  /// DrRetro::init()).
-  virtual std::string gamePath() const { return m_retro ? m_retro->gamePath() : std::string{}; }
-
-  /// Path to the guest's core library. When set, the base dlopens it lazily on the
-  /// first launch (see loadCore / applyGameData) instead of at construction, so
-  /// cores are only opened once actually booted into. Empty = no own core (e.g. a
-  /// Dolphin sub-game that shares CoreDolphin's core). Defaults to DrRetro::init()'s.
-  virtual std::string corePath() const { return m_retro ? m_retro->corePath() : std::string{}; }
-
-  /// Loads the guest's core, once, before its first content load. The default
-  /// dlopens corePath(); override for cores that need custom loading (e.g.
-  /// CoreDolphin patches its library first). Returns false if the core can't load.
-  virtual bool loadCore();
-
-  /// Frames to let the core boot after the deferred loadContent before the base
-  /// invokes doApplyGameData(). Override per core as needed.
-  virtual unsigned bootFrames() const { return 30; }
-
-  /// Whether the deferred doApplyGameData() must run on the GUI thread rather than
-  /// the core's timing thread. Most guests apply on the timing thread (safe for
-  /// state loads + memory writes); return true only if doApplyGameData does GUI
-  /// work like show()/waitFrames()/processEvents() (e.g. CoreDolphin's disc swap).
-  virtual bool applyOnGuiThread() const { return false; }
-
-  /// Default: connect run() to the core's frameBegin and start it. Guests that own
-  /// a core (via DrRetro::init) need nothing more; override for special cases.
-  virtual void startCore();
-  virtual void pause() { if (m_retro) m_retro->pause(); }
-  virtual void unpause() { if (m_retro) m_retro->unpause(); }
-  virtual QWidget *createWidget(QWidget *parent)
-  {
-    m_container = QWidget::createWindowContainer(core(), parent);
-
-    /* Accept keyboard focus without needing to click */
-    m_container->setFocusPolicy(Qt::StrongFocus);
-
-    return m_container;
-  }
-
-  void tick()
-  {
-    if (m_finishCountdown > 0 && --m_finishCountdown == 0)
-    {
-      finishMinigame();
-      return;
-    }
-    run();
-  }
+  /// Per-frame driver: runs the finish countdown, then the guest's run().
+  void tick();
 
   virtual dr_minigame_result_t minigameResult(unsigned index) = 0;
 
@@ -131,117 +74,76 @@ public:
   virtual const char *name(void) const = 0;
   virtual dr_guest id(void) const { return DR_GUEST_INVALID; }
 
-  /// The core this guest runs on, its ROM filename (under the roms dir), and its
-  /// savestate base name (dr_state_directory()/<state>.state.zip). An owned-core
-  /// guest overrides these; the constructor feeds coreId()/rom() to DrRetro::init()
-  /// and doApplyGameData() feeds state() to loadState().
+  /// The libretro core this guest uses, if any. See `dr_core`
   virtual dr_core coreId(void) const { return DR_CORE_INVALID; }
+
+  /// The filename of the ROM this guest uses, if any
   virtual const char *rom(void) const { return ""; }
+
+  /// The filename of the savestate this guest loads, if any
   virtual const char *state(void) const { return ""; }
 
-  virtual QList<DrMinigameGroup> minigameGroups() const;
-  void cancelMinigame() { m_minigameActive = false; }
-  bool minigameActive() const { return m_minigameActive; }
+  void cancelMinigame(void) { m_minigameActive = false; }
+  bool minigameActive(void) const { return m_minigameActive; }
 
-  /// Applies a whole minigame launch — the chosen minigame and all four players
-  /// — in one call. Sets m_minigame, applies emulation quirks, then dispatches to
-  /// the guest's doApplyGameData(). Replaces the old per-variable
-  /// setMinigame/setPlayer path.
   void applyGameData(const DrGameData &data);
 
 protected:
   void log(unsigned level, const char *message)
   {
-    /* Also echo to stderr: the logger isn't connected to guests until after they
-     * are constructed, so construction-time messages (failed to load core / rom
-     * not found / failed to load content) would otherwise be lost. */
+    /* Also echo to stderr */
     fprintf(stderr, "[guest] %s\n", message);
     emit logMessage(level, QString::fromUtf8(message));
   }
-  void startMinigame();
-  void finishMinigame();
+  void startMinigame(void);
+  void finishMinigame(void);
   void finishMinigameInFrames(int frames) { m_finishCountdown = frames; }
-
-  /// Loads the guest's savestate from dr_state_directory()/<name>.state.zip, logs
-  /// the result, and returns whether it loaded. Called from doApplyGameData.
-  bool loadState(const char *name);
+  /// Whether a finishMinigameInFrames() countdown is running.
+  bool finishPending(void) const { return m_finishCountdown > 0; }
 
   virtual void run() {}
 
-  /// Guest hook: apply `data` (minigame + 4 players) to the core in whatever way
-  /// it needs — write player memory, load a savestate, start the minigame, etc.
-  /// For deferred guests this runs once the core has booted (bootFrames after the
-  /// first launch); for warmed guests it runs immediately. See applyGameData().
+  /**
+   * Any behavior that modifies game state based on the board
+   * context, done after the guest game has loaded
+   */
   virtual void doApplyGameData(const DrGameData &data) = 0;
 
-  /// Deferred-guest hook run at launch time, *before* loadContent/startCore on the
-  /// first launch (and before the re-apply countdown on later launches). Use it for
-  /// anything that must precede the core booting — e.g. laying down hires-texture
-  /// data the core reads at content load. No-op by default; never called for warmed
-  /// guests (they are already booted).
-  virtual void onBeforeBoot(const DrGameData &data) { (void)data; }
+  /// Brings the game up and applies `data` to it. The default applies it
+  /// straight away; a libretro guest boots its core first.
+  virtual void boot(const DrGameData &data) { doApplyGameData(data); }
 
   bool m_valid = true;
   bool m_minigameActive = false;
-  /* Pause the core the instant startMinigame() fires so netplay peers latch onto an
-   * identical frame (the launcher unpauses once it is the gated context). Dolphin
-   * delegates clear this: they share a core that CoreDolphin drives, so only
-   * CoreDolphin's own startMinigame does the pause. */
-  bool m_pauseOnStart = true;
   int m_finishCountdown = 0;
-  int m_minigameFrameCount = 0;    // frames elapsed in the current minigame
-  bool m_frameHookInstalled = false;
   const dr_mp_minigame_t *m_minigame = nullptr;
 
-  /* Core wrapper, shared by every guest that owns a core (set up via
-   * DrRetro::init()). Dolphin sub-games leave it pointing at a shared core. */
-  DrRetro *m_retro = nullptr;
-
   /* The four players for the current launch, copied from the launch data by
-   * applyGameData() before doApplyGameData()/onBeforeBoot() run. */
+   * applyGameData() before boot() runs. */
   dr_player_t m_players[4] = {};
 
   /* The host's console family for the current launch, copied alongside the
    * players. Guests that draw the board's characters read it to pick an art set. */
   dr_host_platform m_hostPlatform = DR_HOST_PLATFORM_INVALID;
 
-  /// Resize the core's window to fill its container. Must run on the GUI thread;
-  /// the base queues it after a deferred boot (the core sizes itself to the game's
-  /// native resolution when it boots, so this makes the widget fill the area).
-  void resizeToContainer();
-
-  /* Deferred-boot state (see applyGameData). Protected so guests' run() can react
-   * to the boot window (e.g. mute while m_stateLoadCountdown > 0). */
-  bool m_started = false;           // content loaded + core booted
-  int m_stateLoadCountdown = 0;     // frames until doApplyGameData() is invoked
-  DrGameData m_pendingData;         // launch data awaiting the boot countdown
-  bool m_deferHookInstalled = false;
-  QWidget *m_container = nullptr;    // window container from createWidget()
-
 signals:
   void logMessage(unsigned level, const QString &message);
+
   void minigameStarted();
   void minigameFinished();
-  /// A minigame was aborted (e.g. the global stuck-minigame timeout) rather than
-  /// completing normally. Return to the board without writing results.
-  void minigameCanceled();
-  /// Proactively asks for a hard resync (e.g. on the frame a mini-game begins), to
-  /// realign peers after the non-deterministic boot/practice. May fire repeatedly.
-  void hardResyncRequested();
-  /// Requests netplay "golf mode": `authorityPlayer` (a player index 0-3) gets 0
-  /// input delay, everyone else `highDelay` frames. -1 disables it. See setGolfMode.
-  void golfModeRequested(int authorityPlayer, int highDelay);
+  
+  /**
+   * Requests netplay to perform a hard resync, loading serializaed state
+   * from the host for every client. Use in game-specific instances where a
+   * desync is suspected.
+   */
+  void hardResync(void);
 
-protected:
-  /// Netplay "golf mode": give one player (`authorityPlayer`, a player index that
-  /// maps to a netplay peer) 0 input delay and everyone else `highDelay` frames, so
-  /// that player has responsive priority in turn-based games (e.g. golf). Pass -1 to
-  /// turn it off. No effect outside a netplay session. Call it from a deterministic
-  /// point (it is applied identically on every peer).
-  void setGolfMode(int authorityPlayer, int highDelay = 30)
-  {
-    emit golfModeRequested(authorityPlayer, highDelay);
-  }
+  /**
+   * Requests netplay to give input authority to a specific player index.
+   * Use in games where players take turns or only one player plays.
+   */
+  void golfModeRequested(int authorityPlayer);
 };
 
 #endif

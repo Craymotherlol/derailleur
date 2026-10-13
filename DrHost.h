@@ -2,7 +2,6 @@
 #define DR_HOST_H
 
 #include "DrGuest.h"
-#include "DrRetro.h"
 #include <QStringList>
 #include <array>
 
@@ -66,12 +65,23 @@ public:
 /// asks for mini-game candidates, launches guest mini-games, and writes their
 /// results back. All game-specific detection lives in subclasses (e.g.
 /// MarioPartyN64Host); the rest of the program only ever talks to this interface.
-class DrHost : public DrRetro
+class DrHost : public QObject
 {
   Q_OBJECT
 
 public:
   explicit DrHost(QObject *parent = nullptr);
+
+  /// The host's libretro core, or null for a host that isn't libretro-powered.
+  virtual QRetro *core() const { return nullptr; }
+  virtual bool isValid() const { return m_valid; }
+
+  /// The board's content path.
+  virtual std::string gamePath() const { return std::string{}; }
+
+  virtual void startCore() {}
+  virtual void pause() {}
+  virtual void unpause() {}
 
   /// Which host game this is (used for netplay/session identity).
   virtual dr_game game(void) const = 0;
@@ -79,6 +89,9 @@ public:
   /// The console family this host runs on, handed to guests with the launch data
   /// so they can pick artwork that matches the board (see dr_player_icon_32px).
   virtual dr_host_platform platform(void) const { return DR_HOST_PLATFORM_INVALID; }
+
+  /// The widget the board is shown in.
+  virtual QWidget *createWidget(QWidget *parent) { (void)parent; return nullptr; }
 
   /// Wildcard patterns selecting which files under the save directory are shipped
   /// to netplay clients at session start, so every peer plays off the host's save.
@@ -138,16 +151,24 @@ public:
   int localPlayer(void) const { return m_LocalPlayer; }
 
 protected:
+  void log(unsigned level, const char *message)
+  {
+    emit logMessage(level, QString::fromUtf8(message));
+  }
+
+  bool m_valid = true;
   int m_LocalPlayer = 0;
   DrMinigameSource *m_MinigameSource = nullptr;
 
 signals:
+  void logMessage(unsigned level, const QString &message);
+
   /// A guest mini-game should be launched for `candidate` with these players.
   void minigameRequested(DrMinigameCandidate candidate, DrPlayerArray players);
 
   /// Request netplay "golf mode": `authorityPlayer` (a peer index) gets 0 input delay,
-  /// everyone else `highDelay` frames. -1 disables it. See DrNetplay::setGolfMode.
-  void golfModeRequested(int authorityPlayer, int highDelay);
+  /// everyone else a high delay. -1 disables it. See DrNetplay::setGolfMode.
+  void golfModeRequested(int authorityPlayer);
 };
 
 #endif

@@ -1,6 +1,7 @@
 #include "DrRetro.h"
 
 #include <QFile>
+#include <QWidget>
 
 void dr_apply_global_core_options(QRetro *core, dr_core which)
 {
@@ -153,12 +154,31 @@ void DrRetro::applyWiiControls(dr_wii_control control)
 
 void DrRetro::init(dr_core core, const QString &rom, bool saving)
 {
-  m_corePath = dr_core_path(core).toStdString();
-  m_gamePath = (dr_roms_directory() + "/" + rom).toStdString();
-
   QRetro *c = new QRetro();
+
+  setPaths(dr_core_path(core), rom);
   c->setSavingEnabled(saving);
   dr_apply_global_core_options(c, core);
+  setCore(c);
+}
+
+void DrRetro::init(const QString &core, const QString &rom, bool saving)
+{
+  QRetro *c = new QRetro();
+
+  /* A bare filename is looked up in the cores dir with the OS extension */
+  if (core.contains('/') || core.contains('\\'))
+    setPaths(core, rom);
+  else
+    setPaths(dr_cores_directory() + "/" + core + dr_os_extension(), rom);
+  c->setSavingEnabled(saving);
+  setCore(c);
+}
+
+void DrRetro::setPaths(const QString &corePath, const QString &rom)
+{
+  m_corePath = corePath.toStdString();
+  m_gamePath = (dr_roms_directory() + "/" + rom).toStdString();
 
   /* Content loads lazily on the first launch (see DrGuest::applyGameData); just
    * confirm the ROM is present so a missing one drops the guest at startup. */
@@ -168,8 +188,134 @@ void DrRetro::init(dr_core core, const QString &rom, bool saving)
       qPrintable(QString("rom not found: %1").arg(QString::fromStdString(m_gamePath))));
     m_valid = false;
   }
+}
 
-  setCore(c, true);
+bool DrRetro::loadCore()
+{
+  if (!m_core || m_corePath.empty())
+    return false;
+  return m_core->loadCore(m_corePath.c_str());
+}
+
+bool DrRetro::boot(unsigned frames, std::function<void()> onBooted)
+{
+  if (!m_core)
+    return false;
+
+  m_onBooted = std::move(onBooted);
+  if (m_booted)
+  {
+    m_bootCountdown = 1; /* already booted; run on the next frame */
+    return true;
+  }
+
+  /* Open the core now, on the first boot, rather than at construction. */
+  if (!loadCore())
+  {
+    log(DR_LOG_ERROR, "failed to load core");
+    return false;
+  }
+  m_booted = true;
+
+  if (!m_gamePath.empty())
+    m_core->loadContent(m_gamePath.c_str());
+  startCore();
+
+  if (!m_bootHookInstalled)
+  {
+    m_bootHookInstalled = true;
+    connect(m_core, &QRetro::frameBegin, this, [this]() {
+      if (m_bootCountdown <= 0)
+        return;
+      /* Mute through the boot window. On the first boot mainwindow's mute ran
+       * before the core existed (audio() was still null), so re-assert it here
+       * each frame; the minigameStarted handler unmutes once the game starts. */
+      if (dr_settings_get().mute_while_loading)
+        if (auto *a = m_core->audio())
+          a->setMute(true);
+      if (--m_bootCountdown != 0)
+        return;
+      /* Runs on the timing thread (safe for state loads + memory). The container
+       * nudge runs on the GUI thread, after it. */
+      if (m_onBooted)
+        m_onBooted();
+      QMetaObject::invokeMethod(this, [this]() { resizeToContainer(); },
+        Qt::QueuedConnection);
+    }, Qt::DirectConnection);
+  }
+  m_bootCountdown = frames ? frames : 1;
+  return true;
+}
+
+bool DrRetro::loadState(const char *name)
+{
+  if (!m_core)
+    return false;
+  const QString path = dr_state_directory() + "/" + name + ".state.zip";
+  const bool ok = m_core->unserializeFromFile(path);
+  log(ok ? DR_LOG_INFO : DR_LOG_WARN,
+    qPrintable(QString("load state %1: %2").arg(path, ok ? "ok" : "failed")));
+  return ok;
+}
+
+void DrRetro::applyQuirks(const dr_mp_minigame_t *minigame)
+{
+  if (!minigame || !m_core || !m_core->options())
+    return;
+
+  const char *option_value = nullptr;
+  /* Held for as long as option_value may point into it. */
+  const QByteArray efb_scale = QByteArray::number(dr_settings_get().res_scale_gcn);
+
+  /// Graphics > Settings > Texture Cache Accuracy
+  /// 128=Normal, 512=Fast, 0=Safe
+  if (minigame->quirks.dolphin.needs_safe_texture_cache)
+  {
+    log(DR_LOG_INFO, "Mini-game requires safe texture cache, enabling...");
+    option_value = "0";
+  }
+  else
+    option_value = "128";
+  m_core->options()->setOptionValue("dolphin_texture_cache_accuracy", option_value);
+
+  /// Graphics > Hacks > Skip EFB Copy to RAM
+  /// All the negative negation makes this look like a typo, but it's not
+  if (minigame->quirks.dolphin.needs_efb_to_texture)
+  {
+    log(DR_LOG_INFO, "Mini-game requires EFB copy to RAM, enabling...");
+    option_value = "disabled";
+  }
+  else
+    option_value = "enabled";
+  m_core->options()->setOptionValue("dolphin_efb_to_texture", option_value);
+
+  /// Graphics > Settings > Internal Resolution
+  /// A quirked mini-game only renders correctly at native; the rest follow the
+  /// user's setting (see dr_settings::res_scale_gcn).
+  if (minigame->quirks.dolphin.needs_native_resolution)
+  {
+    log(DR_LOG_INFO, "Mini-game requires native resolution, enabling...");
+    option_value = "1";
+  }
+  else
+    option_value = efb_scale.constData();
+  m_core->options()->setOptionValue("dolphin_efb_scale", option_value);
+}
+
+QWidget *DrRetro::createWidget(QWidget *parent)
+{
+  m_container = QWidget::createWindowContainer(m_core, parent);
+
+  /* Accept keyboard focus without needing to click */
+  m_container->setFocusPolicy(Qt::StrongFocus);
+
+  return m_container;
+}
+
+void DrRetro::resizeToContainer()
+{
+  if (m_container && m_core)
+    m_core->resize(m_container->width(), m_container->height());
 }
 
 dr_error DrRetro::readu8(uint8_t *out, size_t addr, dr_endianness endianness)

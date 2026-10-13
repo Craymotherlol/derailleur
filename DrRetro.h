@@ -2,12 +2,15 @@
 #define DR_RETRO_H
 
 #include "DrCommon.h"
+#include <functional>
 #include <string>
 #include <QByteArray>
 #include <QList>
 #include <QObject>
 #include <QRetro.h>
 #include <QtEndian>
+
+class QWidget;
 
 /// Applies one Wii Remote control layout to a single player's joypad: button and
 /// stick remaps that make a pad stand in for how the game expects the remote to
@@ -30,26 +33,16 @@ public:
     : QObject(parent)
   {
   }
-  explicit DrRetro(QRetro *sharedCore, QObject *parent = nullptr)
-    : QObject(parent)
-    , m_core(sharedCore)
-    , m_ownCore(false)
-  {
-  }
-  ~DrRetro()
-  {
-    if (m_ownCore)
-      delete m_core;
-  }
+  ~DrRetro() { delete m_core; }
 
   QRetro *core() const { return m_core; }
   bool isValid() const { return m_valid; }
 
-  void setCore(QRetro *core, bool own = true)
+  /// Takes ownership of `core`, replacing any previous one.
+  virtual void setCore(QRetro *core)
   {
-    if (m_ownCore) delete m_core;
+    delete m_core;
     m_core = core;
-    m_ownCore = own;
   }
 
   /// Standard setup for a guest that owns a core: creates the QRetro, records the
@@ -59,16 +52,54 @@ public:
   /// N64 button remaps. `saving` toggles the core's SRAM writes (off by default).
   virtual void init(dr_core core, const QString &rom, bool saving = false);
 
-  /// Paths recorded by init(), consumed by DrGuest's lazy first-launch load.
+  /// As above, but loads the core by filename instead of a dr_core: a bare name
+  /// (no extension) is looked up in the cores dir, a path is used as-is. Global
+  /// core options aren't applied, since they're keyed by dr_core.
+  void init(const QString &core, const QString &rom, bool saving = false);
+
+  /// Core library and content paths, loaded lazily by boot(). Set by init(), or
+  /// directly for cores set up by hand.
   std::string corePath() const { return m_corePath; }
   std::string gamePath() const { return m_gamePath; }
+  void setCorePath(const std::string &path) { m_corePath = path; }
+  void setGamePath(const std::string &path) { m_gamePath = path; }
 
-  void pause()
+  /// Loads the core library, once, before the first content load. The default
+  /// dlopens corePath(); override for cores that need custom loading (e.g.
+  /// DrRetroDolphin patches its library first). Returns false if it can't load.
+  virtual bool loadCore();
+
+  /// Boots the core lazily and calls `onBooted` once it has run `frames` frames.
+  /// The first call loads the core and content and starts it; later calls just
+  /// re-run `onBooted` on the next frame. Audio is held muted through the boot
+  /// window when the user asked for it. `onBooted` runs on the timing thread;
+  /// the window container is resized on the GUI thread after it. Returns false
+  /// if the core can't load.
+  bool boot(unsigned frames, std::function<void()> onBooted);
+
+  /// Whether a boot() countdown is in progress.
+  bool booting() const { return m_bootCountdown > 0; }
+
+  /// Loads dr_state_directory()/<name>.state.zip, logs the result, and returns
+  /// whether it loaded.
+  bool loadState(const char *name);
+
+  /// Pushes a mini-game's emulation quirks (see dr_emulation_quirk_t) into the
+  /// core's options. Options the core doesn't have are ignored.
+  void applyQuirks(const dr_mp_minigame_t *minigame);
+
+  /// A window container around the core, focusable without a click.
+  QWidget *createWidget(QWidget *parent);
+
+  /// Resizes the core's window to fill its container. Must run on the GUI thread.
+  void resizeToContainer();
+
+  virtual void pause()
   {
     if (m_core)
       m_core->pause();
   }
-  void unpause()
+  virtual void unpause()
   {
     if (m_core)
       m_core->unpause();
@@ -81,27 +112,8 @@ public:
 
   /// Puts every port on one Wii control layout, for a context that doesn't vary
   /// it per player (a board, a menu). Guests that split solo/team layouts per
-  /// mini-game use DolphinGuest::applyControlRemap instead.
+  /// mini-game use DrGuestWii::applyControlRemap instead.
   void applyWiiControls(dr_wii_control control);
-
-  void applyN64Remaps()
-  {
-    if (!m_core)
-      return;
-    for (unsigned port = 0; port < DR_CONTROL_PORT_SIZE - 1; port++)
-    {
-      /**
-       * libretro Mupen64 lays out the Nintendo 64 buttons in an odd order.
-       * We normalize them here so they feel natural across system shifts.
-       */
-      m_core->input()->remapButton(port, RETRO_DEVICE_ID_JOYPAD_B, RETRO_DEVICE_ID_JOYPAD_Y); // B = B
-      m_core->input()->remapButton(port, RETRO_DEVICE_ID_JOYPAD_A, RETRO_DEVICE_ID_JOYPAD_B); // A = A
-      m_core->input()->remapButton(port, RETRO_DEVICE_ID_JOYPAD_Y, RETRO_DEVICE_ID_JOYPAD_A); // Y = C??
-
-      m_core->input()->remapButton(port, RETRO_DEVICE_ID_JOYPAD_L, RETRO_DEVICE_ID_JOYPAD_L2); // L1 = Z
-      m_core->input()->remapButton(port, RETRO_DEVICE_ID_JOYPAD_R, RETRO_DEVICE_ID_JOYPAD_R2); // R1 = R
-    }
-  }
 
 public:
   dr_error readu8(uint8_t *out, size_t addr, dr_endianness endianness = DR_ENDIANNESS_INVALID);
@@ -129,15 +141,13 @@ public:
   void tickFrameWrites();
 
   QRetro *m_core = nullptr;
-  bool m_ownCore = false;
   bool m_valid = true;
   std::string m_corePath; // core library path, for the lazy first-launch load
   std::string m_gamePath; // content path, for the lazy first-launch load
+  QWidget *m_container = nullptr; // window container from createWidget()
 
 protected:
-  /// Endianness used when an access doesn't pass one explicitly. Plain DrRetro is
-  /// little-endian (raw); DrRetroN64 sets this to wordflipped so N64 code can use
-  /// hardware addresses without repeating the flag on every call.
+  /// The endianness used for memory r/w
   dr_endianness m_endianness = DR_ENDIANNESS_LITTLE;
   dr_endianness resolveEndianness(dr_endianness e) const
   {
@@ -154,36 +164,18 @@ private:
   };
   QList<FrameWrite> m_frameWrites;
 
+  /// Records the core and content paths for init(), dropping isValid() if the
+  /// ROM is missing.
+  void setPaths(const QString &corePath, const QString &rom);
+
+  /* boot() state */
+  bool m_booted = false;
+  bool m_bootHookInstalled = false;
+  int m_bootCountdown = 0;
+  std::function<void()> m_onBooted;
+
 signals:
   void logMessage(unsigned level, const QString &message);
-};
-
-/// DrRetro whose accesses default to wordflipped, matching mupen64plus's RAM
-/// layout. N64 guests/hosts use this so they can define hardware addresses and
-/// read/write without passing DR_ENDIANNESS_WORDFLIPPED every time. An explicit
-/// endianness argument still overrides it (e.g. raw ROM patches).
-class DrRetroN64 : public DrRetro
-{
-  Q_OBJECT
-
-public:
-  DrRetroN64(QObject *parent = nullptr)
-    : DrRetro(parent)
-  {
-    m_endianness = DR_ENDIANNESS_WORDFLIPPED;
-  }
-  explicit DrRetroN64(QRetro *sharedCore, QObject *parent = nullptr)
-    : DrRetro(sharedCore, parent)
-  {
-    m_endianness = DR_ENDIANNESS_WORDFLIPPED;
-  }
-
-  /// Same as DrRetro::init() plus the N64 button remaps.
-  void init(dr_core core, const QString &rom, bool saving = false) override
-  {
-    DrRetro::init(core, rom, saving);
-    applyN64Remaps();
-  }
 };
 
 #endif

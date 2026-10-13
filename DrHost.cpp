@@ -3,7 +3,7 @@
 #include <QFileInfo>
 
 DrHost::DrHost(QObject *parent)
-  : DrRetro(parent)
+  : QObject(parent)
 {
   qRegisterMetaType<DrMinigameCandidate>();
   qRegisterMetaType<DrPlayerArray>();

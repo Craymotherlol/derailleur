@@ -46,7 +46,6 @@ public:
 
 signals:
   void minigameFinished();
-  void minigameCanceled();
   void logMessage(unsigned level, const QString &message);
 
 private:
