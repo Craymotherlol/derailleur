@@ -79,7 +79,7 @@ public:
   DrRetroNES(QObject *parent = nullptr)
     : DrRetro(parent)
   {
-    m_endianness = DR_ENDIANNESS_BIG;
+    m_endianness = DR_ENDIANNESS_LITTLE;
   }
 };
 
