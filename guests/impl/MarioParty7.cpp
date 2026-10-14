@@ -171,6 +171,7 @@ static const dr_mp_minigame_t MP7_MINIGAMES[] = {
   /* Rare / Boss */
   { "Ice Moves", DR_MINIGAME_SPECIAL, 0x25, 0x2B, DR_NO_QUIRKS, DR_NO_FLAGS },
   { "Stick and Spin", DR_MINIGAME_SPECIAL, 0x4B, 0x51, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "The Bonus Mic game!!", DR_MINIGAME_SPECIAL, 0x54, 0x5A, DR_NO_QUIRKS, DR_FLAG_MIC },
   { "Bowser's Lovely Lift!", DR_MINIGAME_SPECIAL, 0x55, 0x5B, DR_NO_QUIRKS, DR_NO_FLAGS },
 
   { nullptr, DR_MINIGAME_INVALID, 0xFF, 0xFF, DR_NO_QUIRKS, DR_NO_FLAGS },

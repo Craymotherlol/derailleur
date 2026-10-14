@@ -48,12 +48,12 @@ static const dr_minigame_type MP7_MINIGAME_TYPE_TO_DR[] = {
   DR_MINIGAME_1V3, /* 1 */
   DR_MINIGAME_2V2, /* 2 */
   DR_MINIGAME_BATTLE, /* 3 */
-  DR_MINIGAME_BOWSER, /* KOOPA */
-  DR_MINIGAME_INVALID, /* size 0, seemingly unused */
+  DR_MINIGAME_BOWSER, /* 4 */
+  DR_MINIGAME_INVALID, /* 5 - size 0, seemingly unused */
   DR_MINIGAME_DUEL, /* 6 */
-  DR_MINIGAME_DK, /* 7 - DONKEY */
-  DR_MINIGAME_INVALID, /* 8 - 12 games? */
-  DR_MINIGAME_INVALID, /* 9 - 1 game? */
+  DR_MINIGAME_DK, /* 7 */
+  DR_MINIGAME_INVALID, /* 8 - 8-Player */
+  DR_MINIGAME_INVALID, /* 9 - Bonus Mic minigame */
   DR_MINIGAME_INVALID, /* 10 - 2 games? */
 };
 
