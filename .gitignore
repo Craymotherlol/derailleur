@@ -7,3 +7,4 @@ Makefile.Release
 object_script.derailleur.Debug
 object_script.derailleur.Release
 .qmake.stash
+/.vscode
