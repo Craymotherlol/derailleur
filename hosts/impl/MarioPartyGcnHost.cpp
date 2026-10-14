@@ -588,10 +588,16 @@ void MarioPartyGcnHost::startMinigame(void)
   m_retro->readValue(&id, m_config.values.minigame_id);
   chosen = id;
 
-  id--;
+  /* MP7's cave hands out ids from 7 up, four per type */
+  if (game() == DR_GAME_MARIOPARTY7)
+    id = (id - 7) % 4;
+  else
+  {
+    id--;
 
-  /* For MP4, since we use mini-game IDs 0x11-0x15 and 0x25,0x26 */
-  id &= 0x03;
+    /* For MP4, since we use mini-game IDs 0x11-0x15 and 0x25,0x26 */
+    id &= 0x03;
+  }
 
   log(DR_LOG_INFO,
     qPrintable(QString("roulette chose mini-game id 0x%1 -> candidate slot %2")
