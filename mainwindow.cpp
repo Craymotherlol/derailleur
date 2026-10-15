@@ -10,6 +10,7 @@
 #include <QPixmap>
 #include <QRandomGenerator>
 #include <QRetro.h>
+#include <QShortcut>
 #include <QTimer>
 
 #ifdef _WIN32
@@ -117,6 +118,7 @@ MainWindow::MainWindow(QWidget *parent)
   setupGuests();
   setupFilter();
   setupStack();
+  setupFullscreen();
   m_Overlay = new DrOverlay(this);
   setupDebug();
   setupChallenge();
@@ -165,6 +167,31 @@ void MainWindow::setupStack()
       if (QWidget *container = m_Guests->currentWidget())
         guest->core()->resize(container->width(), container->height());
   });
+}
+
+void MainWindow::setupFullscreen(void)
+{
+  QShortcut *escape = new QShortcut(QKeySequence(Qt::Key_Escape), this);
+
+  escape->setEnabled(false);
+  connect(escape, &QShortcut::activated, this, [this, escape]() {
+    escape->setEnabled(false);
+    showNormal();
+  });
+
+  auto toggle = [this, escape]() {
+    if (isFullScreen())
+      showNormal();
+    else
+      showFullScreen();
+    escape->setEnabled(isFullScreen());
+  };
+
+  connect(new QShortcut(QKeySequence(Qt::Key_F11), this), &QShortcut::activated, this, toggle);
+  connect(new QShortcut(QKeySequence(Qt::ALT | Qt::Key_Return), this), &QShortcut::activated,
+    this, toggle);
+  connect(new QShortcut(QKeySequence(Qt::ALT | Qt::Key_Enter), this), &QShortcut::activated,
+    this, toggle);
 }
 
 void MainWindow::setupGuests()

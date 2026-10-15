@@ -38,6 +38,7 @@ protected:
 
 private:
   void setupStack();
+  void setupFullscreen(void);
   void setupGuests();
   void setupFilter();
   void setupDebug();
