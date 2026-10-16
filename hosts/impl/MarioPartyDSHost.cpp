@@ -27,8 +27,6 @@
  *    } InputRecord;       // 0x26
  * ------------------------------------------------------------------------- */
 
-/* One port's InputRecord fields, plus its accept flag -- which lives in its own
- * array rather than in the record, but is per-port all the same. */
 typedef struct
 {
   dr_value_t buttons;
@@ -48,8 +46,6 @@ typedef struct
     { (record) - MPDS_RAM_BASE + 0x04, DR_VALUE_TYPE_U16 }, \
     { (flag) - MPDS_RAM_BASE, DR_VALUE_TYPE_S8 } }
 
-/* Port 0 is listed for completeness only: the game refills it from the real DS
- * every frame, so anything written there is clobbered. */
 static const mpds_input_record_t MPDS_INPUT[4] = {
   MPDS_INPUT_RECORD(0x020CCCC0, 0x020CCD7E),
   MPDS_INPUT_RECORD(0x020CCCE6, 0x020CCD7F),
@@ -60,35 +56,10 @@ static const mpds_input_record_t MPDS_INPUT[4] = {
 /* Report 4 input devices */
 static const unsigned MPDS_PORTS = 4;
 
-/* touchX, touchY and the flags word are contiguous at record + 0x02, so the pen
- * state copies as one block. */
 static const size_t MPDS_TOUCH_BYTES = 4;
 
-/* The pad state the game actually reads. func_01ffc1e4 builds one of these per
- * frame out of a button word:
- *
- *   typedef struct {
- *     u16 held;          // 0x00  buttons down this frame
- *     u16 pressed;       // 0x02  held & ~held_last_frame
- *     u16 released;      // 0x04  let go this frame
- *     u16 repeat;        // 0x06  pressed, plus auto-repeat retriggers
- *     u16 delay[12];     // 0x08  frames until the next retrigger, per button
- *     u16 count[12];     // 0x20  frames the button has been held, per button
- *   } mpds_pad_t;        // 0x38
- */
-static const size_t MPDS_PAD_STRIDE = 0x38;
-static const size_t MPDS_PAD_TABLE = 0x020C8298 - MPDS_RAM_BASE;
-static const size_t MPDS_SYSTEM_PAD = 0x020C81E0 - MPDS_RAM_BASE;
-
-/* Likewise the pen: one system block and four per-port, 0x20 each. */
-static const size_t MPDS_TOUCH_STRIDE = 0x20;
-static const size_t MPDS_TOUCH_TABLE = 0x020C8218 - MPDS_RAM_BASE;
-static const size_t MPDS_SYSTEM_TOUCH = 0x020C819C - MPDS_RAM_BASE;
-
-static const unsigned MPDS_PAD_BUTTONS = 12;
-static const uint16_t MPDS_REPEAT_FIRST = 0x18;
-static const uint16_t MPDS_REPEAT_SECOND = 0x10;
-static const uint16_t MPDS_REPEAT_FASTEST = 4;
+static const size_t MPDS_PAD_HELD_ADDR = MPDS_PAD_HELD - MPDS_RAM_BASE;
+static const size_t MPDS_HEX_SHOW_ADDR = MPDS_HEX_SHOW - MPDS_RAM_BASE;
 
 static const struct
 {
@@ -124,8 +95,6 @@ static const size_t MPDS_HOST_STATE_ADDR = MPDS_HOST_STATE - MPDS_RAM_BASE;
 static const size_t MPDS_TITLE_BLOCK_ADDR = MPDS_TITLE_BLOCK - MPDS_RAM_BASE;
 static const size_t MPDS_COLOUR_BLOCK_ADDR = MPDS_COLOUR_BLOCK - MPDS_RAM_BASE;
 
-/* Titles are UTF-16LE: 31 characters and a NUL per 64-byte slot. The widest DS
- * roulette offers four. */
 #define MPDS_TITLE_SLOT_SIZE 64
 #define MPDS_TITLE_SLOTS 4
 
@@ -133,23 +102,11 @@ static const size_t MPDS_COLOUR_BLOCK_ADDR = MPDS_COLOUR_BLOCK - MPDS_RAM_BASE;
  * bits; skip_ret ORs this in when the board hands the mini-game off. */
 #define MPDS_HANDOFF 0x80
 
-/* A duel space's pair, set just before its roulette (func_0204b680). */
 static const size_t MPDS_DUEL_CHALLENGER = 0x0214D530 - MPDS_RAM_BASE; /* s8 */
 static const size_t MPDS_DUEL_OPPONENT = 0x0214D531 - MPDS_RAM_BASE;   /* s8 */
 
-/* The ARM9 binary ships compressed and unpacks itself over its own load
- * address during boot, so a write into the cave or a hook site before then is
- * trampled -- or lands in the compressed stream and crashes the game.
- *
- * Keep this as low as the unpack allows. melonDS's JIT compiles a block the
- * first time it runs and does not recompile it when the frontend writes over
- * the code, so a hook stamped after the game has executed that block is
- * ignored until the block cache is flushed -- which is what loading a savestate
- * does, and why loading any state, even a broken one, repairs the input. */
 #define MPDS_WARMUP_FRAMES 10
 
-/* Native roulette type -> dr_minigame_type. Boss and puzzle never roll on the
- * party board. */
 static const dr_minigame_type MPDS_MINIGAME_TYPE_TO_DR[] = {
   DR_MINIGAME_4P,      /* 0 */
   DR_MINIGAME_1V3,     /* 1 */
@@ -160,7 +117,6 @@ static const dr_minigame_type MPDS_MINIGAME_TYPE_TO_DR[] = {
   DR_MINIGAME_INVALID, /* 6 puzzle */
 };
 
-/* Which of the three 0x234-byte player contexts is live: mode = (word >> 7) & 7. */
 static const dr_value_t MPDS_GAME_MODE_WORD = { 0x0214CD74 - MPDS_RAM_BASE, DR_VALUE_TYPE_U32 };
 static const size_t MPDS_CTX_STORY = 0x0214CD88 - MPDS_RAM_BASE; /* mode 0 */
 static const size_t MPDS_CTX_PARTY = 0x0214CFBC - MPDS_RAM_BASE; /* mode 3 */
@@ -235,12 +191,9 @@ typedef enum
   MPDS_FONT_LIGHT_GRAY = 9
 } mpds_font_color;
 
-/* RNG: s = s * 0x123967 + 0x1E43F, draw returns (s >> 16) & 0x7fff. */
 static const dr_value_t MPDS_RNG_STATE = { 0x020C94B4 - MPDS_RAM_BASE, DR_VALUE_TYPE_U32 };
-static const dr_value_t MPDS_TIMER = { 0x020C17C4 - MPDS_RAM_BASE, DR_VALUE_TYPE_U32 };
+static const dr_value_t MPDS_TIMER = { /* 0x020C17C4 - MPDS_RAM_BASE */ 0, DR_VALUE_TYPE_U32 };
 
-/* Scene ids. The mini-game scenes double as the mini-game list: a mini-game's
- * index is its scene id - 0x2c (see MPDS_MINIGAME_ID). */
 static const dr_scene_name_t MPDS_SCENE_NAMES[] =
 {
   { 0x00, "Debug scene select", true },
@@ -477,15 +430,13 @@ int MarioPartyDSHost::gameMode(void)
 
 size_t MarioPartyDSHost::context(void)
 {
-  /* Story is mode 0, party mode 3; 1/2/4 (extra, puzzle, mini-game) share one
-   * context. Anything else is a mode we have not seen set a context. */
   switch (gameMode())
   {
   case 0:
     return MPDS_CTX_STORY;
-  case 1:
-  case 2:
-  case 4:
+  case 1: // extra
+  case 2: // puzzle
+  case 4: // minigame
     return MPDS_CTX_OTHER;
   case 3:
     return MPDS_CTX_PARTY;
@@ -501,10 +452,7 @@ size_t MarioPartyDSHost::record(size_t ctx, unsigned slot)
   if (!ctx || slot > 3)
     return 0;
 
-  /* Under the team rule a slot's coins and stars live on its team leader's
-   * record rather than its own, so redirect there. Everything else (character,
-   * mini-game wins) stays per-slot, so callers wanting those index the context
-   * directly instead of coming through here. */
+  /* Redirect to team leader in 2v2 mode */
   m_retro->readu32(&rules, ctx + MPDS_CTX_RULES);
   if (MPDS_RULE(rules) == MPDS_RULE_TEAM)
   {
@@ -544,9 +492,8 @@ void MarioPartyDSHost::setCurrentTurn(unsigned turn)
 {
   const size_t ctx = context();
 
-  /* The board caps both counters at 30. */
   if (ctx)
-    m_retro->writes8(static_cast<int8_t>(turn > 30 ? 30 : turn), ctx + MPDS_CTX_TURN_CUR);
+    m_retro->writes8(static_cast<int8_t>(turn), ctx + MPDS_CTX_TURN_CUR);
 }
 
 bool MarioPartyDSHost::readPlayerSetup(DrPlayerArray &players)
@@ -573,8 +520,6 @@ bool MarioPartyDSHost::readPlayerSetup(DrPlayerArray &players)
     p.difficulty = MPDS_DIFFICULTIES[MPDS_PL_DIFFICULTY(flags)];
     p.coins = coins;
     p.stars = stars;
-
-    /* One slot per DS input record, so the board index is the port. */
     p.control_port = i;
   }
 
@@ -637,9 +582,7 @@ void MarioPartyDSHost::updateHumanPorts(void)
 
     if (m_portActive[port])
     {
-      /* Nothing here sets a seat back to CPU, so seeing the bit again means a
-       * person did -- the debug menu. Take that as final: drop the latch and
-       * leave the seat alone. Pressing anything on the port claims it back. */
+      /* If debug menu set someone to CPU, stop updating their input */
       if (MPDS_PL_CPU(flags))
       {
         m_portActive[port] = false;
@@ -676,89 +619,15 @@ int MarioPartyDSHost::turnOwner(void)
   return owner >= 0 && owner < static_cast<int8_t>(MPDS_PORTS) ? owner : -1;
 }
 
-void MarioPartyDSHost::writePad(unsigned port, uint16_t buttons)
-{
-  const size_t base = MPDS_PAD_TABLE + port * MPDS_PAD_STRIDE;
-  uint16_t held, pressed = 0, released = 0, repeat = 0, previous = 0;
-  unsigned i;
-
-  m_retro->readu16(&previous, base);
-
-  /* Opposite directions cannot be down together: the game drops the whole d-pad
-   * rather than pick one, so do the same before anything reads it. */
-  held = buttons;
-  if ((held & 0x0F0) == 0x0F0 || (held & 0x030) == 0x030 || (held & 0x0C0) == 0x0C0)
-    held = static_cast<uint16_t>(buttons & ~0x0F0);
-
-  pressed = static_cast<uint16_t>(held & (held ^ previous));
-
-  /* Auto-repeat, frame for frame as func_01ffc1e4 does it: a button retriggers
-   * once on the way down, again 0x18 frames later, then 0x10, then a frame
-   * sooner each time until it is retriggering every 4. Menus scroll on this. */
-  for (i = 0; i < MPDS_PAD_BUTTONS; i++)
-  {
-    const uint16_t bit = static_cast<uint16_t>(1u << i);
-    const size_t delayAt = base + 0x08 + i * sizeof(uint16_t);
-    const size_t countAt = base + 0x20 + i * sizeof(uint16_t);
-    uint16_t delay = 0, count = 0;
-
-    m_retro->readu16(&delay, delayAt);
-    m_retro->readu16(&count, countAt);
-
-    if (held & bit)
-    {
-      if (!delay)
-      {
-        delay = MPDS_REPEAT_FIRST;
-        count = 0;
-        repeat |= bit;
-      }
-      else if (++count >= delay)
-      {
-        if (delay == MPDS_REPEAT_FIRST)
-          delay = MPDS_REPEAT_SECOND;
-        else if (delay > MPDS_REPEAT_FASTEST)
-          delay--;
-
-        count = 0;
-        repeat |= bit;
-      }
-    }
-    else
-    {
-      /* Only a button that was actually down counts as released. */
-      if (delay)
-        released |= bit;
-
-      delay = 0;
-      count = 0;
-    }
-
-    m_retro->writeu16(delay, delayAt);
-    m_retro->writeu16(count, countAt);
-  }
-
-  m_retro->writeu16(held, base);
-  m_retro->writeu16(pressed, base + 0x02);
-  m_retro->writeu16(released, base + 0x04);
-  m_retro->writeu16(repeat, base + 0x06);
-}
-
 void MarioPartyDSHost::cloneStick(void)
 {
   QRetroInput *input = core() ? core()->input() : nullptr;
   const int owner = turnOwner();
   unsigned index, id;
 
-  /* melonDS DS only ever reads a stick on port 0 -- the console has one stylus
-   * -- so the turn owner's stick is copied there to drive the touch cursor. An
-   * owner of 0 already is port 0, and copying a port onto itself would re-apply
-   * its own stick remap, so leave that case alone. */
   if (!input || owner <= 0)
     return;
 
-  /* Both sticks, both axes: the source's own remaps are already folded into
-   * analogStick(), so what lands on port 0 is what that player is aiming. */
   for (index = RETRO_DEVICE_INDEX_ANALOG_LEFT; index <= RETRO_DEVICE_INDEX_ANALOG_RIGHT; index++)
     for (id = RETRO_DEVICE_ID_ANALOG_X; id <= RETRO_DEVICE_ID_ANALOG_Y; id++)
       input->joypads()[0].setAnalogStick(index, id,
@@ -768,45 +637,57 @@ void MarioPartyDSHost::cloneStick(void)
 void MarioPartyDSHost::writeInput(void)
 {
   QRetroInput *input = core() ? core()->input() : nullptr;
-  uint8_t touch[MPDS_TOUCH_STRIDE] = {};
-  uint16_t buttons[MPDS_PORTS] = {};
-  bool have_touch;
   unsigned port;
 
   if (!input)
     return;
 
-  /* The real DS pen, read once and shared out to every port below. */
-  have_touch =
-    core()->memory().readBuffer(touch, MPDS_SYSTEM_TOUCH, MPDS_TOUCH_STRIDE) == MPDS_TOUCH_STRIDE;
-
-  /* Write touch input into every port */
   for (port = 0; port < MPDS_PORTS; port++)
   {
     unsigned i;
 
-    buttons[port] = 0;
+    m_buttons[port] = 0;
     for (i = 0; i < sizeof(MPDS_BUTTONS) / sizeof(MPDS_BUTTONS[0]); i++)
       if (input->state(port, RETRO_DEVICE_JOYPAD, 0, MPDS_BUTTONS[i].id))
-        buttons[port] |= MPDS_BUTTONS[i].bit;
+        m_buttons[port] |= MPDS_BUTTONS[i].bit;
+
+    m_retro->writeValue(m_buttons[port], MPDS_INPUT[port].buttons);
+    m_retro->writeValue(1, MPDS_INPUT[port].valid);
   }
+}
+
+void MarioPartyDSHost::writePads(void)
+{
+  unsigned port;
+
+  /* Held only: the game edge-detects them itself, once per pass. */
+  for (port = 0; port < MPDS_PORTS; port++)
+    m_retro->writeu16(m_buttons[port], MPDS_PAD_HELD_ADDR + port * sizeof(uint16_t));
+}
+
+void MarioPartyDSHost::updateHexShow(void)
+{
+  unsigned port, humans = 0;
 
   for (port = 0; port < MPDS_PORTS; port++)
+    m_hexShow[port] = 0;
+
+  /* Netplay: only your own hexes are revealed. */
+  if (dr_netplay_active())
   {
-    /* The input buffer the game reads: each port's own controller, stamped
-     * straight into its record, with the valid bit held so the record is
-     * accepted. Nothing is copied between ports. */
-    m_retro->writeValue(buttons[port], MPDS_INPUT[port].buttons);
-    m_retro->writeValue(1, MPDS_INPUT[port].valid);
+    const int local = localPlayer();
 
-    writePad(port, buttons[port]);
-
-    /* One pen, shared: the DS has only the one screen, so every port sees the
-     * real pen rather than a simulated one. */
-    if (have_touch)
-      core()->memory().writeBuffer(touch, MPDS_TOUCH_TABLE + port * MPDS_TOUCH_STRIDE,
-        MPDS_TOUCH_STRIDE);
+    if (local >= 0 && local < static_cast<int>(MPDS_PORTS))
+      m_hexShow[local] = 1;
+    return;
   }
+
+  /* Offline: reveal for a lone human, hide when they share the screen. */
+  for (port = 1; port < MPDS_PORTS; port++)
+    if (m_portActive[port])
+      humans++;
+  if (humans == 0)
+    m_hexShow[0] = 1;
 }
 
 void MarioPartyDSHost::stampCave(void)
@@ -815,21 +696,15 @@ void MarioPartyDSHost::stampCave(void)
   const size_t table = MPDS_IDTABLE - MPDS_CAVE_ADDR;
   const size_t tableSize = MPDS_TITLE_BLOCK - MPDS_IDTABLE;
 
-  /* The code and the forced idTable, every frame: both are constant, and the
-   * hooks branch into the code, so it must never be missing while they are in.
-   * host_state belongs to the game and the state machine, and title_block to
-   * stampTitles, so neither is touched here. */
   core()->memory().writeBuffer(MPDS_CAVE, MPDS_CAVE_ADDR - MPDS_RAM_BASE, text);
   core()->memory().writeBuffer(&MPDS_CAVE[table], MPDS_IDTABLE - MPDS_RAM_BASE, tableSize);
+  core()->memory().writeBuffer(m_hexShow.data(), MPDS_HEX_SHOW_ADDR, m_hexShow.size());
 }
 
 void MarioPartyDSHost::applyHooks(void)
 {
   unsigned i;
 
-  /* One list now: nothing depends on the game mode any more. The per-mode
-   * my_aid hooks are gone -- "this console" is player 1 in every mode, and
-   * every other seat reads its own input buffer. */
   for (i = 0; MPDS_HOOK_BOARD[i][0] != 0; i++)
     m_retro->writeu32(MPDS_HOOK_BOARD[i][1], MPDS_HOOK_BOARD[i][0] - MPDS_RAM_BASE);
 }
@@ -839,14 +714,6 @@ void MarioPartyDSHost::writeConnectedPorts(void)
   uint8_t ports = 0x01; /* port 0 is the real DS and always counts */
   unsigned port;
 
-  /* Which ports have a person on them, which is what the window and menu owner
-   * setters are really asking: a window for a port in this mask stays on that
-   * port's pad, and one for a port outside it falls back to port 0. So a CPU
-   * seat's dialogue -- or any seat nobody has claimed -- can be advanced by
-   * whoever is at the DS, instead of waiting on a controller that isn't there.
-   *
-   * The latch is the right signal for this, not the seats' CPU flags: it means
-   * someone is physically holding the port, and the flags are downstream of it. */
   for (port = 1; port < MPDS_PORTS; port++)
     if (m_portActive[port])
       ports |= static_cast<uint8_t>(1u << port);
@@ -856,8 +723,15 @@ void MarioPartyDSHost::writeConnectedPorts(void)
 
 void MarioPartyDSHost::setState(dr_mpds_host_state state)
 {
-  static const char *names[] = { "INVALID", "BEFORE_BOARD", "BOARD", "ROULETTE", "AFTER_ROULETTE",
-    "MINIGAME" };
+  static const char *names[] =
+  {
+    "INVALID",
+    "BEFORE_BOARD",
+    "BOARD",
+    "ROULETTE",
+    "AFTER_ROULETTE",
+    "MINIGAME"
+  };
 
   log(
     DR_LOG_INFO, qPrintable(QString("host state: %1 -> %2").arg(names[m_state]).arg(names[state])));
@@ -866,8 +740,6 @@ void MarioPartyDSHost::setState(dr_mpds_host_state state)
 
 void MarioPartyDSHost::rollMinigames(void)
 {
-  /* One shared reroll keeps every netplay peer's pool identical; the rolled
-   * type's candidates are cached once the roulette says which it is. */
   if (m_MinigameSource)
     m_MinigameSource->rerollMinigames();
 }
@@ -931,8 +803,6 @@ void MarioPartyDSHost::readPlayers(DrPlayerArray &players)
   /* Check player count, for duel boards */
   m_retro->readValue(&seated, MPDS_PLAYER_COUNT);
 
-  /* A duel comes from the duel rule or Desert Duel, where both seated players
-   * always play, or from a duel space, which named its pair before rolling. */
   if (ctx)
     m_retro->readu32(&rules, ctx + MPDS_CTX_RULES);
   if (MPDS_RULE(rules) == MPDS_RULE_DUEL || extras)
@@ -962,16 +832,11 @@ void MarioPartyDSHost::readPlayers(DrPlayerArray &players)
       p.team_type = p.team_id == 0 ? DR_TEAM_TYPE_1V3_SOLO : DR_TEAM_TYPE_1V3_GROUP;
       break;
     case DR_MINIGAME_2V2:
-      /* Pen Pals pairs P1 and P2 against the COM-controlled P3 and P4 rather than
-       * going through the party board's space colours. */
       if (extras)
         p.team_id = i < 2 ? 0 : 1;
       p.team_type = DR_TEAM_TYPE_2V2;
       break;
     case DR_MINIGAME_DUEL:
-      /* 0 target / 1 initiator / 2 nonparticipant, the convention the other boards
-       * use. A duel space's challenger is the player whose turn it is; under the
-       * duel rule nobody challenged anybody, so the roles just follow the slots. */
       p.team_id = static_cast<int>(i) == challenger ? 1 : static_cast<int>(i) == opponent ? 0 : 2;
       p.team_type = p.team_id == 0   ? DR_TEAM_TYPE_DUEL_TARGET
                     : p.team_id == 1 ? DR_TEAM_TYPE_DUEL_INITIATOR
@@ -1020,7 +885,9 @@ void MarioPartyDSHost::run(void)
     return;
 
   /* The cave first: the hooks branch into it. */
+  updateHexShow();
   stampCave();
+  writePads();
   updateHumanPorts();
   writeConnectedPorts();
   applyHooks();
@@ -1111,16 +978,11 @@ void MarioPartyDSHost::run(void)
     uint8_t reserved = 0;
     int64_t next = 0;
 
-    /* skip_ret flags the hand-off once the spin has finished. Launch then, while
-     * the board is still fading out -- whatever runs next (a results scene, or the
-     * board itself settling a duel) reads the payouts as soon as it starts, and
-     * the guest has to have written them first. */
     m_retro->readu8(&reserved, MPDS_HOST_STATE_ADDR + offsetof(dr_host_state_t, reserved));
     if (!(reserved & MPDS_HANDOFF))
       break;
 
-    /* The end-of-turn roulette hands off to a results scene; a duel space hands
-     * straight back to the board. */
+    /* duel=back to board, otherwise=results overlay */
     m_retro->readValue(&next, MPDS_SCENE_NEXT);
     m_toResults = next == MPDS_SCENE_RESULTS || next == MPDS_SCENE_BATTLE_RESULTS;
 
@@ -1130,8 +992,6 @@ void MarioPartyDSHost::run(void)
   }
 
   case DR_MPDS_HOST_STATE_MINIGAME:
-    /* Back on the board once the results scene hands control back -- or at once
-     * for a duel space, which has no results scene and settles on the board. */
     if (!m_toResults || (currentScene != previousScene && previousScene == MPDS_SCENE_RESULTS))
     {
       rollMinigames();

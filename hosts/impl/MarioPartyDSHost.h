@@ -40,17 +40,20 @@ public:
 private:
   void run(void);
 
-  /* Fill every port's pad from the frontend, and share the real pen out to all
-   * of them. Offline the game leaves the per-port pads alone, so these stand. */
+  /* Read every port's buttons from the frontend into m_buttons and the
+   * InputRecords. */
   void writeInput(void);
   void cloneStick(void);
 
-  /* Build one port's pad state -- held, pressed, released and auto-repeat --
-   * the way the game's own input update would have. */
-  void writePad(unsigned port, uint16_t buttons);
+  /* Hand m_buttons to the cave's pad_held, which the game builds the per-port
+   * pads from. Only once the cave is stamped. */
+  void writePads(void);
 
   /* Edge-detects and logs the current scene. Returns it, or -1 if unreadable. */
   int pollScene(void);
+
+  /* Which ports' hexes to reveal: your own in netplay, a lone human's offline. */
+  void updateHexShow(void);
 
   /* Copy the mpmod cave's code and idTable into RAM, and poke the board and
    * input hook tables. Nothing is written until the ARM9 binary has finished
@@ -101,6 +104,13 @@ private:
   int16_t m_lastScene = -1;
 
   dr_mpds_host_state m_state = DR_MPDS_HOST_STATE_INVALID;
+
+  /* Each port's held buttons this frame, NitroSDK PAD_* bits. */
+  std::array<uint16_t, 4> m_buttons = {};
+
+  /* hex_show: per player slot, nonzero shows that player's hexes as what they
+   * are, zero covers them with the owner's emblem. Stock offline view. */
+  std::array<uint8_t, 4> m_hexShow = { 0, 0, 0, 0 };
 
   /* Ports claimed by a player. Latched until the seat is set back to CPU. */
   std::array<bool, 4> m_portActive = {};
