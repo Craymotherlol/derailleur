@@ -319,7 +319,7 @@ typedef enum
 
 /**
  * Which console family a host game belongs to. The player artwork ships in one
- * set per family (assets/player-32px/n64 and .../gcwii), so a guest drawing the
+ * set per family (assets/player-32px/n64, .../gcwii and .../nds), so a guest drawing the
  * board's players picks the set that matches the host it was launched from.
  */
 typedef enum
@@ -333,16 +333,24 @@ typedef enum
   DR_HOST_PLATFORM_SIZE
 } dr_host_platform;
 
-/// The art-set directory name for `platform`. Anything but the N64 family uses
-/// the GameCube/Wii set, which is the one that covers every dr_character.
+/// The art-set directory name for `platform`. Anything else uses the
+/// GameCube/Wii set, which is the one that covers every dr_character.
 static inline const char *dr_host_platform_dir(dr_host_platform platform)
 {
-  return platform == DR_HOST_PLATFORM_N64 ? "n64" : "gcwii";
+  switch (platform)
+  {
+  case DR_HOST_PLATFORM_N64:
+    return "n64";
+  case DR_HOST_PLATFORM_DS:
+    return "nds";
+  default:
+    return "gcwii";
+  }
 }
 
-/// Resource path for a player's 32px icon in `platform`'s art set. The N64 set
-/// only draws the characters those games have, so anyone it is missing falls
-/// back to the GameCube/Wii art rather than coming out blank.
+/// Resource path for a player's 32px icon in `platform`'s art set. The N64 and
+/// DS sets only draw the characters those games have, so anyone they are
+/// missing falls back to the GameCube/Wii art rather than coming out blank.
 static inline QString dr_player_icon_32px(dr_host_platform platform, dr_character character)
 {
   const QString path = QString(":/assets/player-32px/%1/%2.png")
