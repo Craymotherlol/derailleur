@@ -15,6 +15,9 @@ static const dr_value_t MP8_TIMER = { 0x802CDD4C, DR_VALUE_TYPE_U32 };
 /// s16 - minigame variant perhaps? course id for moped
 static const size_t MP8_MINIGAME_VARIANT_ADDR = 0x802CE35E;
 
+/// u32 - cleared every frame on the mini-game explanation screen
+static const dr_value_t MP8_EXPLAIN_BACK_BUTTON = { 0x802CE34C, DR_VALUE_TYPE_U32 };
+
 /// scene id of the mini-game explanation screen
 static const int32_t MP8_SCENE_MINIGAME_EXPLAIN = 0x16;
 
@@ -473,6 +476,10 @@ void MarioParty8::run()
       finishMinigame();
     }
   }
+
+  /* Keep the explanation screen's back button value cleared */
+  if (m_lastScene == MP8_SCENE_MINIGAME_EXPLAIN)
+    m_retro->writeValue(0, MP8_EXPLAIN_BACK_BUTTON);
 
   /* In Moped Mayhem, write the character every frame */
   if (m_minigame && m_minigame->minigame_id == 0x44)
