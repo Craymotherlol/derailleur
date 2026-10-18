@@ -1,5 +1,6 @@
 #include "MarioParty7.h"
 
+#include <QRetro.h>
 #include <cstring>
 
 /* Mario Party 7's playable roster, in native id order. */
@@ -168,6 +169,20 @@ static const dr_mp_minigame_t MP7_MINIGAMES[] = {
   { "Funderwall!", DR_MINIGAME_BOWSER, 0x3F, 0x45, DR_NO_QUIRKS, DR_NO_FLAGS },
   { "Magmagical Journey!", DR_MINIGAME_BOWSER, 0x40, 0x46, DR_NO_QUIRKS, DR_NO_FLAGS },
 
+  /* 8-Player */
+  { "Real Smoothie", DR_MINIGAME_4P, 0x06, 0x0D, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Synch-row-nicity", DR_MINIGAME_4P, 0x4C, 0x52, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Grin and Bar It", DR_MINIGAME_4P, 0x4D, 0x53, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Hammer Spammer", DR_MINIGAME_4P, 0x4E, 0x54, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Gimme a Brake", DR_MINIGAME_4P, 0x4F, 0x55, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Bumper to Bumper", DR_MINIGAME_4P, 0x50, 0x56, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Spin Off", DR_MINIGAME_4P, 0x51, 0x57, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Rope a Dope", DR_MINIGAME_4P, 0x52, 0x58, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Duct & Cover", DR_MINIGAME_4P, 0x53, 0x59, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Bob-ombic Plague", DR_MINIGAME_4P, 0x58, 0x5E, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Unhappy Trails", DR_MINIGAME_4P, 0x59, 0x5F, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Shock Absorbers", DR_MINIGAME_4P, 0x5A, 0x60, DR_NO_QUIRKS, DR_NO_FLAGS },
+
   /* Rare / Boss */
   { "Ice Moves", DR_MINIGAME_SPECIAL, 0x25, 0x2B, DR_NO_QUIRKS, DR_NO_FLAGS },
   { "Stick and Spin", DR_MINIGAME_SPECIAL, 0x4B, 0x51, DR_NO_QUIRKS, DR_NO_FLAGS },
@@ -224,11 +239,165 @@ static const dr_value_t MP7_MIC_OPTION = { 0x802F2630, DR_VALUE_TYPE_S32 };
 
 #define MP7_MIC_CONTROLLER 2
 
+/* Player structs are 0x0A apart; players 5-8 follow the first four. */
+#define MP7_PLAYER_STRIDE 0x0A
+#define MP7_CHARACTER_ADDR_P1 0x80290c48
+#define MP7_CONTROLLER_ADDR_P1 0x80290c4a
+#define MP7_TEAM_ADDR_P1 0x80290c4e
+#define MP7_DIFFICULTY_ADDR_P1 0x80290c4c
+#define MP7_BOT_ADDR_P1 0x80290c50
+#define MP7_DIFFICULTY_VERY_HARD 0x03
+
+/* 8-player mini-games, played here with players 5-8 as extra partners. */
+static bool mp7_is_8p_minigame(signed minigame_id)
+{
+  return minigame_id == 0x06 || (minigame_id >= 0x4C && minigame_id <= 0x53) ||
+         (minigame_id >= 0x58 && minigame_id <= 0x5A);
+}
+
+/* A character's duo partner, or -1 if they have none. */
+static int mp7_partner_of(int64_t character)
+{
+  switch (character)
+  {
+  case MP7_CHARACTER_MARIO:
+    return MP7_CHARACTER_LUIGI;
+  case MP7_CHARACTER_LUIGI:
+    return MP7_CHARACTER_MARIO;
+  case MP7_CHARACTER_PEACH:
+    return MP7_CHARACTER_DAISY;
+  case MP7_CHARACTER_DAISY:
+    return MP7_CHARACTER_PEACH;
+  case MP7_CHARACTER_YOSHI:
+    return MP7_CHARACTER_BIRDO;
+  case MP7_CHARACTER_BIRDO:
+    return MP7_CHARACTER_YOSHI;
+  case MP7_CHARACTER_WARIO:
+    return MP7_CHARACTER_WALUIGI;
+  case MP7_CHARACTER_WALUIGI:
+    return MP7_CHARACTER_WARIO;
+  case MP7_CHARACTER_TOAD:
+    return MP7_CHARACTER_TOADETTE;
+  case MP7_CHARACTER_TOADETTE:
+    return MP7_CHARACTER_TOAD;
+  case MP7_CHARACTER_BOO:
+    return MP7_CHARACTER_DRY_BONES;
+  case MP7_CHARACTER_DRY_BONES:
+    return MP7_CHARACTER_BOO;
+  default:
+    return -1;
+  }
+}
+
+/* Gives players 5-8 characters nobody else has and pairs them off with players
+ * 1-4, so the teams are 2v2v2v2 with IDs 0-3. */
+static void mp7_apply_extra_players(DrRetro *retro)
+{
+  bool used[15] = { false };
+  int64_t siblings[4] = { -1, -1, -1, -1 };
+  unsigned i;
+
+  for (i = 0; i < 4; i++)
+  {
+    int64_t character = 0;
+    dr_value_t character_value = { MP7_CHARACTER_ADDR_P1 + i * MP7_PLAYER_STRIDE,
+                                    DR_VALUE_TYPE_U16 };
+
+    if (retro->readValue(&character, character_value) == DR_OK && character >= 0 && character <= MP7_CHARACTER_DRY_BONES)
+    {
+      used[character] = true;
+      siblings[i] = character;
+    }
+  }
+
+  for (i = 0; i < 8; i++)
+  {
+    dr_value_t team_value = { MP7_TEAM_ADDR_P1 + i * MP7_PLAYER_STRIDE, DR_VALUE_TYPE_U16 };
+
+    if (i >= 4)
+    {
+      dr_value_t character_value = { MP7_CHARACTER_ADDR_P1 + i * MP7_PLAYER_STRIDE,
+                                     DR_VALUE_TYPE_U16 };
+      dr_value_t sibling_controller = { MP7_CONTROLLER_ADDR_P1 + (i - 4) * MP7_PLAYER_STRIDE,
+                                        DR_VALUE_TYPE_U16 };
+      dr_value_t controller_value = { MP7_CONTROLLER_ADDR_P1 + i * MP7_PLAYER_STRIDE,
+                                      DR_VALUE_TYPE_U16 };
+      dr_value_t sibling_difficulty = { MP7_DIFFICULTY_ADDR_P1 + (i - 4) * MP7_PLAYER_STRIDE,
+                                        DR_VALUE_TYPE_U16 };
+      dr_value_t difficulty_value = { MP7_DIFFICULTY_ADDR_P1 + i * MP7_PLAYER_STRIDE,
+                                      DR_VALUE_TYPE_U16 };
+      dr_value_t sibling_bot = { MP7_BOT_ADDR_P1 + (i - 4) * MP7_PLAYER_STRIDE, DR_VALUE_TYPE_U16 };
+      dr_value_t bot_value = { MP7_BOT_ADDR_P1 + i * MP7_PLAYER_STRIDE, DR_VALUE_TYPE_U16 };
+      int64_t sibling_is_bot = 0;
+      int64_t sibling = 0;
+      int64_t current = 0;
+      int partner = mp7_partner_of(siblings[i - 4]);
+      unsigned free_count = 0;
+      unsigned pick;
+      unsigned character;
+
+      /* Prefer the sibling's duo partner; otherwise anyone still free. */
+      if (partner >= 0 && !used[partner])
+        character = static_cast<unsigned>(partner);
+      else
+      {
+        for (character = 0; character <= MP7_CHARACTER_DRY_BONES; character++)
+          if (!used[character])
+            free_count++;
+
+        pick = static_cast<unsigned>(dr_rand()) % free_count;
+        for (character = 0; character <= MP7_CHARACTER_DRY_BONES; character++)
+          if (!used[character] && pick-- == 0)
+            break;
+      }
+
+      used[character] = true;
+      retro->writeValue(character, character_value);
+
+      /* Same port as the sibling in players 1-4, but always a bot. */
+      if (retro->readValue(&sibling, sibling_controller) == DR_OK)
+        retro->writeValue(sibling, controller_value);
+      if (retro->readValue(&current, bot_value) == DR_OK)
+        retro->writeValue(current | 0x01, bot_value);
+
+      /* Partnering a human: very hard. Partnering a CPU: the same difficulty. */
+      if (retro->readValue(&sibling_is_bot, sibling_bot) == DR_OK && (sibling_is_bot & 0x01))
+      {
+        if (retro->readValue(&sibling, sibling_difficulty) == DR_OK)
+          retro->writeValue(sibling, difficulty_value);
+      }
+      else
+        retro->writeValue(MP7_DIFFICULTY_VERY_HARD, difficulty_value);
+    }
+
+    retro->writeValue(i % 4, team_value);
+  }
+}
+
 void MarioParty7::doApplyGameData(const DrGameData &data)
 {
+  bool is_8p;
+  unsigned port;
+
   MarioPartyGcn::doApplyGameData(data);
 
   m_retro->writeValue(MP7_MIC_CONTROLLER, MP7_MIC_OPTION);
+
+  is_8p = data.minigame && mp7_is_8p_minigame(data.minigame->minigame_id);
+  if (is_8p)
+    mp7_apply_extra_players(m_retro);
+
+  /* 8-player mini-games are played with L, so A goes in as L there. Dolphin
+   * takes the GameCube L trigger from L2. */
+  if (core() && core()->input())
+  {
+    for (port = 0; port < 4; port++)
+    {
+      core()->input()->clearButtonRemaps(port);
+      if (is_8p)
+        core()->input()->remapButton(port, RETRO_DEVICE_ID_JOYPAD_A, RETRO_DEVICE_ID_JOYPAD_L2);
+    }
+  }
 }
 
 MarioParty7::MarioParty7(QObject *parent)
