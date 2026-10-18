@@ -42,12 +42,17 @@ private:
 
   /// Writes our players into the game's player table.
   void writePlayers(void);
+
+  /// Patches the explanation screen so it doesn't offer "back" to freeplay.
+  void disableBackButton(void);
   void logResults(void);
 
   int m_minigameFrames = 0;
   bool m_finishScheduled = false;
   /// True once the mini-game's REL has been seen loaded; it unloading means it's over.
   bool m_moduleSeen = false;
+  /// Frames left before the deferred netplay hard resync; 0 = none pending.
+  int m_resyncCountdown = 0;
   /// Game slot and team for each board player, from assignSlots()
   unsigned m_slotOf[4] = { 0, 1, 2, 3 };
   int32_t m_teamOf[4] = { 0, 1, 2, 3 };

@@ -62,6 +62,26 @@ static const dr_value_t MP9_PARTY_POINTS = { 0x81752240, DR_VALUE_TYPE_U32 };
 /// while this reads -1, then switch to the mini-game's own layout.
 static const dr_value_t MP9_MINIGAME_STARTED = { 0x81752520, DR_VALUE_TYPE_S32 };
 
+/// OSModuleInfo list head; each node is { id, next, ... } with the section table pointer at +0x10.
+static const dr_value_t MP9_OS_MODULE_LIST_HEAD = { 0x800030C8, DR_VALUE_TYPE_POINTER };
+static const unsigned MP9_MODULE_LIST_MAX = 32;
+/// OSModuleInfo: pointer - section table ({ addr | exec bit, size }); .data is section 5, .bss 6
+static const size_t MP9_MODULE_SECTION_INFO = 0x10;
+static const unsigned MP9_MODULE_SECTION_DATA = 5;
+static const unsigned MP9_MODULE_SECTION_BSS = 6;
+
+/// The explanation screen (inst.rel). Its scene decides once, in its constructor, whether to
+/// offer "back" (freeplay only), then reads that byte every frame for both the B button and
+/// the back layout. The constructor runs as the module links, so patching the code races it;
+/// clearing the byte doesn't.
+static const unsigned MP9_INST_MODULE_ID = 0xF;
+/// inst .bss+0x50 holds the scene pointer
+static const size_t MP9_INST_SCENE_PTR_BSS_OFFSET = 0x50;
+/// The scene's vtable, inst .data+0x9F4; checked so we never write through a stale pointer
+static const size_t MP9_INST_SCENE_VTABLE_DATA_OFFSET = 0x9F4;
+/// u8 - nonzero when the back option is enabled
+static const size_t MP9_INST_SCENE_BACK_ENABLED_OFFSET = 0x118;
+
 /// u32 - partner index in Bowser Jr. mini-games. Unused for now; noted here in case we ever support those.
 static const size_t MP9_BOWSER_JR_PARTNER_ADDR = 0x8175261C;
 
@@ -167,16 +187,16 @@ static const dr_mp_minigame_t MP9_MINIGAMES[] =
   { "Pix Fix", DR_MINIGAME_1V3, 0x08, 0, DR_WII_CONTROL(DR_WII_CONTROL_POINTER), DR_FLAG_NO_NETPLAY },
   { "Mob Sleds", DR_MINIGAME_1V3, 0x09, 0, DR_WII_CONTROL(DR_WII_CONTROL_SIDEWAYS_BUTTONS), DR_NO_FLAGS },
 
-  { "Mecha March", DR_MINIGAME_SPECIAL, 0x0A, 0, DR_NO_QUIRKS, DR_NO_FLAGS },
-  { "Bowser Pop", DR_MINIGAME_SPECIAL, 0x0B, 0, DR_NO_QUIRKS, DR_NO_FLAGS },
-  { "Double Pounder", DR_MINIGAME_SPECIAL, 0x0C, 0, DR_NO_QUIRKS, DR_NO_FLAGS },
-  { "Zoom Room", DR_MINIGAME_SPECIAL, 0x0D, 0, DR_NO_QUIRKS, DR_NO_FLAGS },
-  { "Cage Match", DR_MINIGAME_SPECIAL, 0x0E, 0, DR_NO_QUIRKS, DR_NO_FLAGS },
-  { "Crossfire Caverns", DR_MINIGAME_SPECIAL, 0x0F, 0, DR_NO_QUIRKS, DR_NO_FLAGS },
-  { "Bumper Sparks", DR_MINIGAME_SPECIAL, 0x10, 0, DR_NO_QUIRKS, DR_NO_FLAGS },
-  { "Sand Trap", DR_MINIGAME_SPECIAL, 0x11, 0, DR_NO_QUIRKS, DR_NO_FLAGS },
-  { "Pair of Aces", DR_MINIGAME_SPECIAL, 0x12, 0, DR_NO_QUIRKS, DR_NO_FLAGS },
-  { "Pedal to the Paddle", DR_MINIGAME_SPECIAL, 0x13, 0, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Mecha March", DR_MINIGAME_PAIR, 0x0A, 0, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Bowser Pop", DR_MINIGAME_PAIR, 0x0B, 0, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Double Pounder", DR_MINIGAME_PAIR, 0x0C, 0, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Zoom Room", DR_MINIGAME_PAIR, 0x0D, 0, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Cage Match", DR_MINIGAME_PAIR, 0x0E, 0, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Crossfire Caverns", DR_MINIGAME_PAIR, 0x0F, 0, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Bumper Sparks", DR_MINIGAME_PAIR, 0x10, 0, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Sand Trap", DR_MINIGAME_PAIR, 0x11, 0, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Pair of Aces", DR_MINIGAME_PAIR, 0x12, 0, DR_NO_QUIRKS, DR_NO_FLAGS },
+  { "Pedal to the Paddle", DR_MINIGAME_PAIR, 0x13, 0, DR_NO_QUIRKS, DR_NO_FLAGS },
 
   { "Urn It", DR_MINIGAME_4P, 0x14, 0, DR_WII_CONTROL(DR_WII_CONTROL_POINTER), DR_FLAG_NO_NETPLAY },
   { "Billistics", DR_MINIGAME_4P, 0x15, 0, DR_WII_CONTROL(DR_WII_CONTROL_SIDEWAYS_BUTTONS), DR_NO_FLAGS },
@@ -249,11 +269,65 @@ MarioParty9::MarioParty9(QObject *parent)
 {
 }
 
+size_t MarioParty9::moduleAddress(unsigned module_id)
+{
+  int64_t node = 0;
+  unsigned i;
+
+  if (m_retro->readValue(&node, MP9_OS_MODULE_LIST_HEAD) != DR_OK)
+    return 0;
+
+  for (i = 0; i < MP9_MODULE_LIST_MAX && node; i++)
+  {
+    int64_t id = 0;
+
+    if (m_retro->readValue(&id, { static_cast<size_t>(node), DR_VALUE_TYPE_U32 }) != DR_OK)
+      return 0;
+    if (id == static_cast<int64_t>(module_id))
+      return static_cast<size_t>(node);
+    if (m_retro->readValue(&node, { static_cast<size_t>(node) + 4, DR_VALUE_TYPE_POINTER }) != DR_OK)
+      return 0;
+  }
+
+  return 0;
+}
+
+void MarioParty9::disableBackButton()
+{
+  const size_t module = moduleAddress(MP9_INST_MODULE_ID);
+  int64_t sections = 0, data = 0, bss = 0, scene = 0, vtable = 0;
+
+  if (!module)
+    return;
+
+  /* Linked section offsets are absolute; bit 0 is the executable flag */
+  if (m_retro->readValue(&sections, { module + MP9_MODULE_SECTION_INFO, DR_VALUE_TYPE_POINTER }) != DR_OK ||
+      m_retro->readValue(&data,
+        { static_cast<size_t>(sections) + MP9_MODULE_SECTION_DATA * 8, DR_VALUE_TYPE_U32 }) != DR_OK ||
+      m_retro->readValue(&bss,
+        { static_cast<size_t>(sections) + MP9_MODULE_SECTION_BSS * 8, DR_VALUE_TYPE_U32 }) != DR_OK)
+    return;
+  data &= ~1;
+  bss &= ~1;
+
+  if (m_retro->readValue(&scene,
+        { static_cast<size_t>(bss) + MP9_INST_SCENE_PTR_BSS_OFFSET, DR_VALUE_TYPE_POINTER }) != DR_OK ||
+      !scene ||
+      m_retro->readValue(&vtable, { static_cast<size_t>(scene), DR_VALUE_TYPE_U32 }) != DR_OK ||
+      vtable != data + static_cast<int64_t>(MP9_INST_SCENE_VTABLE_DATA_OFFSET))
+    return;
+
+  m_retro->writeValue(0,
+    { static_cast<size_t>(scene) + MP9_INST_SCENE_BACK_ENABLED_OFFSET, DR_VALUE_TYPE_U8 });
+}
+
 void MarioParty9::run()
 {
   /* Nothing to drive until the state is loaded */
   if (m_retro->booting())
     return;
+
+  disableBackButton();
 
   if (!m_minigameActive)
   {
@@ -277,8 +351,15 @@ void MarioParty9::run()
     {
       applyControlRemap(m_minigame->quirks, m_players);
       m_controlsApplied = true;
+      if (dr_netplay_active())
+        m_resyncCountdown = 180;
     }
   }
+
+  /* Hold the resync ~3s past the start so it lands on the running mini-game
+   * rather than the frame the controls swap on. */
+  if (m_resyncCountdown > 0 && --m_resyncCountdown == 0)
+    emit hardResync();
 
   if (!m_finishScheduled)
   {
@@ -305,6 +386,7 @@ void MarioParty9::doApplyGameData(const DrGameData &data)
 
   m_minigameFrames = 0;
   m_finishScheduled = false;
+  m_resyncCountdown = 0;
 
   m_partyPointsStart = 0;
   m_retro->readValue(&m_partyPointsStart, MP9_PARTY_POINTS);

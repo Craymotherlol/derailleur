@@ -55,6 +55,15 @@ static const size_t WP_PLAYER_COLORS_ADDR = 0x801DE148;
 /// We match the first four to find it.
 static const uint32_t WP_MODULE_COLORS[4] = { 0x008CFFFF, 0xFF3838FF, 0x10BD0DFF, 0xFF9C00FF };
 
+/// The explanation screen (inst.rel) builds start/practice/back, with B bound to back, only in
+/// freeplay. Patching its `li r30, 1` to `li r30, 0` makes it build the set without back.
+/// The boot state has menu.rel at the same address, so only write once inst is there.
+static const dr_value_t WP_INST_MODULE = { 0x803388A0, DR_VALUE_TYPE_U32 };
+static const int64_t WP_INST_MODULE_ID = 0x6A;
+static const dr_value_t WP_BACK_BUTTON = { 0x8034481C, DR_VALUE_TYPE_U32 };
+static const int64_t WP_BACK_BUTTON_VALUE_OLD = 0x3BC00001;
+static const int64_t WP_BACK_BUTTON_VALUE_NEW = 0x3BC00000;
+
 static dr_value_t wp_player_value(unsigned slot, size_t offset, dr_value_type type)
 {
   return { WP_PLAYERS_ADDR + slot * WP_PLAYER_SIZE + offset, type };
@@ -89,7 +98,6 @@ static int32_t wp_cpu_level(dr_difficulty difficulty)
   }
 }
 
-/* minigame_id is the game's id (loads "mg%03d"); scene_id is that REL's module id */
 static const dr_mp_minigame_t WP_MINIGAMES[] =
 {
   { "Commuter Count", DR_MINIGAME_DUEL, 100, 22, DR_WII_CONTROL(DR_WII_CONTROL_POINTER), DR_NO_FLAGS },
@@ -104,28 +112,28 @@ static const dr_mp_minigame_t WP_MINIGAMES[] =
   { "Pop-Up Bandits", DR_MINIGAME_DUEL, 111, 74, DR_WII_CONTROL(DR_WII_CONTROL_POINTER), DR_NO_FLAGS },
   { "Fruit Focus", DR_MINIGAME_DUEL, 112, 31, DR_WII_CONTROL(DR_WII_CONTROL_POINTER), DR_NO_FLAGS },
 
-  //{ "Flycycle Team", DR_MINIGAME_2V2, 200, 32, DR_WII_CONTROL(DR_WII_CONTROL_WAGGLE), DR_NO_FLAGS }, difficult to do with emulated motion controls
-  { "Fishin' Buddies", DR_MINIGAME_2V2, 201, 33, DR_WII_CONTROL(DR_WII_CONTROL_WAGGLE), DR_NO_FLAGS },
-  { "Bumper Crops", DR_MINIGAME_2V2, 202, 34, DR_WII_CONTROL(DR_WII_CONTROL_SIDEWAYS_MOTION), DR_NO_FLAGS },
-  { "Robot Factory", DR_MINIGAME_2V2, 203, 35, DR_WII_CONTROL(DR_WII_CONTROL_POINTER), DR_NO_FLAGS },
-  { "Flashlight Frights", DR_MINIGAME_2V2, 204, 36, DR_WII_CONTROL(DR_WII_CONTROL_POINTER), DR_NO_FLAGS },
-  { "Basket Bonanza", DR_MINIGAME_2V2, 205, 37, DR_WII_CONTROL(DR_WII_CONTROL_WAGGLE), DR_NO_FLAGS },
-  { "Meet and Greet", DR_MINIGAME_2V2, 206, 38, DR_WII_CONTROL(DR_WII_CONTROL_POINTER), DR_NO_FLAGS },
-  { "Paddle Pals", DR_MINIGAME_2V2, 208, 39, DR_WII_CONTROL(DR_WII_CONTROL_WAGGLE), DR_NO_FLAGS },
-  { "Pop Coaster", DR_MINIGAME_2V2, 209, 40, DR_WII_CONTROL(DR_WII_CONTROL_POINTER), DR_NO_FLAGS },
-  { "Tippy Traverse", DR_MINIGAME_2V2, 210, 41, DR_WII_CONTROL(DR_WII_CONTROL_SIDEWAYS_BUTTONS), DR_NO_FLAGS },
-  { "Pump Cart Panic", DR_MINIGAME_2V2, 211, 42, DR_WII_CONTROL(DR_WII_CONTROL_WAGGLE), DR_NO_FLAGS },
-  { "Sheep Crossing", DR_MINIGAME_2V2, 212, 43, DR_WII_CONTROL(DR_WII_CONTROL_SIDEWAYS_BUTTONS), DR_NO_FLAGS },
-  { "Banana Blockade", DR_MINIGAME_2V2, 213, 44, DR_WII_CONTROL(DR_WII_CONTROL_SIDEWAYS_BUTTONS), DR_NO_FLAGS },
-  { "Spring Ringers", DR_MINIGAME_2V2, 214, 45, DR_WII_CONTROL(DR_WII_CONTROL_WAGGLE), DR_NO_FLAGS },
-  { "Can Poppers", DR_MINIGAME_2V2, 215, 66, DR_WII_CONTROL(DR_WII_CONTROL_POINTER), DR_NO_FLAGS },
-  { "Clover Hunt", DR_MINIGAME_2V2, 216, 46, DR_WII_CONTROL(DR_WII_CONTROL_POINTER), DR_NO_FLAGS },
-  { "Rodent Rundown", DR_MINIGAME_2V2, 218, 47, DR_WII_CONTROL(DR_WII_CONTROL_SIDEWAYS_BUTTONS), DR_NO_FLAGS },
-  //{ "Jump Rope Jam", DR_MINIGAME_2V2, 219, 48, DR_WII_CONTROL(DR_WII_CONTROL_WAGGLE), DR_NO_FLAGS }, difficult to do with emulated motion controls
-  { "Bobsled Highway", DR_MINIGAME_2V2, 221, 49, DR_WII_CONTROL(DR_WII_CONTROL_SIDEWAYS_MOTION), DR_NO_FLAGS },
-  { "Color Coordination", DR_MINIGAME_2V2, 222, 50, DR_WII_CONTROL(DR_WII_CONTROL_SIDEWAYS_BUTTONS), DR_NO_FLAGS },
-  { "Teamwork Temple", DR_MINIGAME_2V2, 223, 51, DR_WII_CONTROL(DR_WII_CONTROL_SIDEWAYS_BUTTONS), DR_NO_FLAGS },
-  { "Blastronauts", DR_MINIGAME_2V2, 224, 52, DR_WII_CONTROL(DR_WII_CONTROL_SIDEWAYS_MOTION), DR_NO_FLAGS },
+  //{ "Flycycle Team", DR_MINIGAME_PAIR, 200, 32, DR_WII_CONTROL(DR_WII_CONTROL_WAGGLE), DR_NO_FLAGS }, difficult to do with emulated motion controls
+  { "Fishin' Buddies", DR_MINIGAME_PAIR, 201, 33, DR_WII_CONTROL(DR_WII_CONTROL_WAGGLE), DR_NO_FLAGS },
+  { "Bumper Crops", DR_MINIGAME_PAIR, 202, 34, DR_WII_CONTROL(DR_WII_CONTROL_SIDEWAYS_MOTION), DR_NO_FLAGS },
+  { "Robot Factory", DR_MINIGAME_PAIR, 203, 35, DR_WII_CONTROL(DR_WII_CONTROL_POINTER), DR_NO_FLAGS },
+  { "Flashlight Frights", DR_MINIGAME_PAIR, 204, 36, DR_WII_CONTROL(DR_WII_CONTROL_POINTER), DR_NO_FLAGS },
+  { "Basket Bonanza", DR_MINIGAME_PAIR, 205, 37, DR_WII_CONTROL(DR_WII_CONTROL_WAGGLE), DR_NO_FLAGS },
+  { "Meet and Greet", DR_MINIGAME_PAIR, 206, 38, DR_WII_CONTROL(DR_WII_CONTROL_POINTER), DR_NO_FLAGS },
+  { "Paddle Pals", DR_MINIGAME_PAIR, 208, 39, DR_WII_CONTROL(DR_WII_CONTROL_WAGGLE), DR_NO_FLAGS },
+  { "Pop Coaster", DR_MINIGAME_PAIR, 209, 40, DR_WII_CONTROL(DR_WII_CONTROL_POINTER), DR_NO_FLAGS },
+  { "Tippy Traverse", DR_MINIGAME_PAIR, 210, 41, DR_WII_CONTROL(DR_WII_CONTROL_SIDEWAYS_BUTTONS), DR_NO_FLAGS },
+  { "Pump Cart Panic", DR_MINIGAME_PAIR, 211, 42, DR_WII_CONTROL(DR_WII_CONTROL_WAGGLE), DR_NO_FLAGS },
+  { "Sheep Crossing", DR_MINIGAME_PAIR, 212, 43, DR_WII_CONTROL(DR_WII_CONTROL_SIDEWAYS_BUTTONS), DR_NO_FLAGS },
+  { "Banana Blockade", DR_MINIGAME_PAIR, 213, 44, DR_WII_CONTROL(DR_WII_CONTROL_SIDEWAYS_BUTTONS), DR_NO_FLAGS },
+  { "Spring Ringers", DR_MINIGAME_PAIR, 214, 45, DR_WII_CONTROL(DR_WII_CONTROL_WAGGLE), DR_NO_FLAGS },
+  { "Can Poppers", DR_MINIGAME_PAIR, 215, 66, DR_WII_CONTROL(DR_WII_CONTROL_POINTER), DR_NO_FLAGS },
+  { "Clover Hunt", DR_MINIGAME_PAIR, 216, 46, DR_WII_CONTROL(DR_WII_CONTROL_POINTER), DR_NO_FLAGS },
+  { "Rodent Rundown", DR_MINIGAME_PAIR, 218, 47, DR_WII_CONTROL(DR_WII_CONTROL_SIDEWAYS_BUTTONS), DR_NO_FLAGS },
+  //{ "Jump Rope Jam", DR_MINIGAME_PAIR, 219, 48, DR_WII_CONTROL(DR_WII_CONTROL_WAGGLE), DR_NO_FLAGS }, difficult to do with emulated motion controls
+  { "Bobsled Highway", DR_MINIGAME_PAIR, 221, 49, DR_WII_CONTROL(DR_WII_CONTROL_SIDEWAYS_MOTION), DR_NO_FLAGS },
+  { "Color Coordination", DR_MINIGAME_PAIR, 222, 50, DR_WII_CONTROL(DR_WII_CONTROL_SIDEWAYS_BUTTONS), DR_NO_FLAGS },
+  { "Teamwork Temple", DR_MINIGAME_PAIR, 223, 51, DR_WII_CONTROL(DR_WII_CONTROL_SIDEWAYS_BUTTONS), DR_NO_FLAGS },
+  { "Blastronauts", DR_MINIGAME_PAIR, 224, 52, DR_WII_CONTROL(DR_WII_CONTROL_SIDEWAYS_MOTION), DR_NO_FLAGS },
 
   { "Flying Fruit", DR_MINIGAME_1V3, 300, 53, DR_WII_CONTROL(DR_WII_CONTROL_POINTER), DR_NO_FLAGS },
   { "Lumber Whacks", DR_MINIGAME_1V3, 301, 54, DR_WII_CONTROL(DR_WII_CONTROL_WAGGLE), DR_NO_FLAGS },
@@ -282,7 +290,9 @@ void WiiParty::assignSlots(void)
 {
   const dr_minigame_type type = m_minigame ? m_minigame->type : DR_MINIGAME_4P;
   bool taken[4] = { false, false, false, false };
+  int32_t wanted[4] = { -1, -1, -1, -1 };
   int32_t next_duelist = 0;
+  int32_t next_partner = 0;
   unsigned i;
 
   for (i = 0; i < 4; i++)
@@ -307,6 +317,16 @@ void WiiParty::assignSlots(void)
         m_teamOf[i] = next_duelist++;
       else
         m_teamOf[i] = -1;
+      wanted[i] = m_teamOf[i];
+      break;
+    case DR_MINIGAME_PAIR:
+      if (dr_team_type_participates(p.team_type) && next_partner < 2)
+      {
+        m_teamOf[i] = 0;
+        wanted[i] = next_partner++;
+      }
+      else
+        m_teamOf[i] = -1;
       break;
     default:
       m_teamOf[i] = static_cast<int32_t>(m_slotOf[i]);
@@ -314,14 +334,14 @@ void WiiParty::assignSlots(void)
     }
   }
 
-  if (type != DR_MINIGAME_DUEL)
+  if (type != DR_MINIGAME_DUEL && type != DR_MINIGAME_PAIR)
     return;
 
-  /* Duelists take slots 0 and 1, the players sitting out fill the rest */
+  /* Duelists or partners take slots 0 and 1, the players sitting out fill the rest */
   for (i = 0; i < 4; i++)
-    if (m_teamOf[i] >= 0 && !taken[m_teamOf[i]])
+    if (wanted[i] >= 0 && !taken[wanted[i]])
     {
-      m_slotOf[i] = static_cast<unsigned>(m_teamOf[i]);
+      m_slotOf[i] = static_cast<unsigned>(wanted[i]);
       taken[m_slotOf[i]] = true;
     }
     else
@@ -340,10 +360,11 @@ void WiiParty::assignSlots(void)
 
 void WiiParty::writePlayers(void)
 {
-  const bool duel = m_minigame && m_minigame->type == DR_MINIGAME_DUEL;
+  const bool two_player = m_minigame &&
+    (m_minigame->type == DR_MINIGAME_DUEL || m_minigame->type == DR_MINIGAME_PAIR);
   unsigned i;
 
-  m_retro->writeValue(duel ? 2 : 4, WP_PLAYER_COUNT);
+  m_retro->writeValue(two_player ? 2 : 4, WP_PLAYER_COUNT);
 
   for (i = 0; i < 4; i++)
   {
@@ -413,11 +434,25 @@ void WiiParty::recolorNewModules(bool recolor)
   }
 }
 
+void WiiParty::disableBackButton(void)
+{
+  int64_t id = 0, instruction = 0;
+
+  /* Checked every frame: the REL arrives before it links, and the buttons are
+   * built a few frames after that. */
+  if (m_retro->readValue(&id, WP_INST_MODULE) == DR_OK && id == WP_INST_MODULE_ID &&
+      m_retro->readValue(&instruction, WP_BACK_BUTTON) == DR_OK &&
+      instruction == WP_BACK_BUTTON_VALUE_OLD)
+    m_retro->writeValue(WP_BACK_BUTTON_VALUE_NEW, WP_BACK_BUTTON);
+}
+
 void WiiParty::run()
 {
   /* Nothing to drive until the state is loaded */
   if (m_retro->booting())
     return;
+
+  disableBackButton();
 
   if (!m_minigameActive)
   {
@@ -431,6 +466,11 @@ void WiiParty::run()
 
   m_minigameFrames++;
   recolorNewModules(true);
+
+  /* Hold the resync ~3s past the module load so it lands on the running
+   * mini-game rather than the frame the controls swap on. */
+  if (m_resyncCountdown > 0 && --m_resyncCountdown == 0)
+    emit hardResync();
 
   if (!m_minigame || m_finishScheduled)
     return;
@@ -449,6 +489,8 @@ void WiiParty::run()
       log(DR_LOG_INFO, qPrintable(QString("mini-game module %1 loaded at frame %2")
         .arg(m_minigame->scene_id).arg(m_minigameFrames)));
       applyControlRemap(m_minigame->quirks, m_players);
+      if (dr_netplay_active())
+        m_resyncCountdown = 180;
     }
   }
   else if (!moduleAddress(static_cast<unsigned>(m_minigame->scene_id)))
@@ -468,6 +510,7 @@ void WiiParty::doApplyGameData(const DrGameData &data)
 
   m_minigameFrames = 0;
   m_finishScheduled = false;
+  m_resyncCountdown = 0;
   m_moduleSeen = false;
   m_recoloredModules.clear();
   recolorNewModules(false);

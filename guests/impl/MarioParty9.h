@@ -24,10 +24,16 @@ protected:
   void doApplyGameData(const DrGameData &data) override;
 
 private:
+  size_t moduleAddress(unsigned module_id);
+  /// Clears the explanation screen's "back" flag while it's up, so the mini-game can't be backed out of.
+  void disableBackButton();
+
   int m_minigameFrames = 0;
   bool m_finishScheduled = false;
   /// False until the start button is clicked and we swap off the pointer layout.
   bool m_controlsApplied = false;
+  /// Frames left before the deferred netplay hard resync; 0 = none pending.
+  int m_resyncCountdown = 0;
   int64_t m_partyPointsStart = 0;
 };
 
