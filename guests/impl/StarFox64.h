@@ -30,8 +30,9 @@ private:
 
   int m_minigameFrames = 0;
   int m_slotToIndex[4] = { -1, -1, -1, -1 }; /* in-game player slot -> board player index */
-  int m_winnerIndex = -1;                    /* board player index of the winner, else -1 */
-  int m_formOption = 0;                      /* starting vehicle to pick (sf64_form_option), 0 = none */
+  unsigned m_winners = 0;                    /* bitmask of winning board player indices */
+  int m_formOption[4] = { 0, 0, 0, 0 };      /* per slot: starting vehicle to pick (sf64_form_option), 0 = none */
+  int m_soloSlot = -1;                       /* 1v3: in-game slot of the solo player, else -1 */
   bool m_shieldsPending = false;             /* Battle Royal: cut shields once play starts */
 };
 

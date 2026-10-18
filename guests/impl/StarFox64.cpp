@@ -26,6 +26,12 @@ static const dr_value_t SF64_VS_MATCH_STATE = { 0x80178754, DR_VALUE_TYPE_S32 };
 static const dr_value_t SF64_VS_WINNER = { 0x801787A8, DR_VALUE_TYPE_S32 };
 static const int SF64_VS_WINNER_TIE = 99;
 
+/* s32 frames waited in the current match state; cleared on each state change */
+static const dr_value_t SF64_VS_STATE_FRAMES = { 0x80178798, DR_VALUE_TYPE_S32 };
+
+/* s32 HUD draw mode; 0 when a winner is decided (non-Time Trial) */
+static const dr_value_t SF64_VS_DRAW_MODE = { 0x80178778, DR_VALUE_TYPE_S32 };
+
 /* s32 Time Trial clock: minutes, seconds (0-59), hundredths (0-99); time is up when all are 0 */
 static const dr_value_t SF64_VS_COUNTDOWN[3] = {
   { 0x80178768, DR_VALUE_TYPE_S32 },
@@ -462,8 +468,24 @@ static const dr_mp_minigame_t SF64_MINIGAMES[] = {
   { "Arwing Time Trial", DR_MINIGAME_4P, SF64_VS_MATCH_TIME_TRIAL, SF64_PLAYER_FORM_ARWING, DR_NO_QUIRKS, DR_FLAG_NO_BOTS },
   { "Landmaster Battle Royal", DR_MINIGAME_4P, SF64_VS_MATCH_BATTLE_ROYAL, SF64_PLAYER_FORM_LANDMASTER, DR_NO_QUIRKS, DR_FLAG_NO_BOTS },
   { "Landmaster Time Trial", DR_MINIGAME_4P, SF64_VS_MATCH_TIME_TRIAL, SF64_PLAYER_FORM_LANDMASTER, DR_NO_QUIRKS, DR_FLAG_NO_BOTS },
+  /* 1v3: the solo flies an Arwing, the trio drive Landmasters */
+  { "Anti-Air Assault", DR_MINIGAME_1V3, SF64_VS_MATCH_BATTLE_ROYAL, SF64_PLAYER_FORM_LANDMASTER, DR_NO_QUIRKS, DR_FLAG_NO_BOTS },
   { nullptr, DR_MINIGAME_INVALID, 0xFF, 0xFF, DR_NO_QUIRKS, DR_NO_FLAGS },
 };
+
+/* The vehicle-choice option that starts a player in `form` */
+static int sf64_form_option_for(int form)
+{
+  switch (form)
+  {
+  case SF64_PLAYER_FORM_LANDMASTER:
+    return SF64_FORM_OPTION_LANDMASTER;
+  case SF64_PLAYER_FORM_ON_FOOT:
+    return SF64_FORM_OPTION_ON_FOOT;
+  default:
+    return SF64_FORM_OPTION_ARWING;
+  }
+}
 
 StarFox64::StarFox64(QObject *parent)
   : DrGuestN64(parent)
@@ -500,11 +522,14 @@ void StarFox64::doApplyGameData(const DrGameData &data)
 {
   (void)data; /* players cached by the base; m_minigame set by the base */
   m_minigameFrames = 0;
-  m_winnerIndex = -1;
-  m_formOption = SF64_FORM_OPTION_NONE;
+  m_winners = 0;
+  m_soloSlot = -1;
   m_shieldsPending = false;
   for (unsigned i = 0; i < 4; i++)
+  {
     m_slotToIndex[i] = -1;
+    m_formOption[i] = SF64_FORM_OPTION_NONE;
+  }
 
   m_retro->loadState(state());
 
@@ -567,20 +592,19 @@ void StarFox64::doApplyGameData(const DrGameData &data)
       m_retro->writeValue(0, SF64_VS_TIME_TRIAL_LIMIT); /* 1 minute */
     m_shieldsPending = m_minigame->minigame_id == SF64_VS_MATCH_BATTLE_ROYAL;
     m_retro->writeValue(stage, SF64_VERSUS_STAGE);
-    for (unsigned i = 0; i < 4; i++)
-      m_retro->writeValueForFrames(form, SF64_PLAYER_FORM[i], 240);
 
-    switch (form)
+    /* 1v3: the solo takes to the air in an Arwing */
+    if (m_minigame->type == DR_MINIGAME_1V3)
+      for (unsigned i = 0; i < 4; i++)
+        if (m_players[i].team_type == DR_TEAM_TYPE_1V3_SOLO && m_players[i].control_port < 4)
+          m_soloSlot = static_cast<int>(m_players[i].control_port);
+
+    for (unsigned slot = 0; slot < 4; slot++)
     {
-    case SF64_PLAYER_FORM_LANDMASTER:
-      m_formOption = SF64_FORM_OPTION_LANDMASTER;
-      break;
-    case SF64_PLAYER_FORM_ON_FOOT:
-      m_formOption = SF64_FORM_OPTION_ON_FOOT;
-      break;
-    default:
-      m_formOption = SF64_FORM_OPTION_ARWING;
-      break;
+      const int slot_form = static_cast<int>(slot) == m_soloSlot ? SF64_PLAYER_FORM_ARWING : form;
+
+      m_retro->writeValueForFrames(slot_form, SF64_PLAYER_FORM[slot], 240);
+      m_formOption[slot] = sf64_form_option_for(slot_form);
     }
   }
 
@@ -599,12 +623,17 @@ void StarFox64::run()
   int64_t state = 0;
   if (m_retro->readValue(&state, SF64_VS_MATCH_STATE) == DR_OK &&
       (state == SF64_VS_STATE_SETUP || state == SF64_VS_STATE_CHOOSE_VEHICLE) &&
-      m_formOption != SF64_FORM_OPTION_NONE)
+      m_formOption[0] != SF64_FORM_OPTION_NONE)
   {
-    m_retro->writeValue(1, SF64_UNLOCK_LANDMASTER);
-    m_retro->writeValue(m_formOption == SF64_FORM_OPTION_ON_FOOT, SF64_UNLOCK_ON_FOOT);
+    bool on_foot = false;
+
     for (unsigned i = 0; i < 4; i++)
-      m_retro->writeValue(m_formOption, SF64_PLAYER_FORM_OPTION[i]);
+    {
+      m_retro->writeValue(m_formOption[i], SF64_PLAYER_FORM_OPTION[i]);
+      on_foot |= m_formOption[i] == SF64_FORM_OPTION_ON_FOOT;
+    }
+    m_retro->writeValue(1, SF64_UNLOCK_LANDMASTER);
+    m_retro->writeValue(on_foot, SF64_UNLOCK_ON_FOOT);
   }
 
   /* Battle Royal: once play starts, cut everyone down to a third of their shields */
@@ -626,6 +655,49 @@ void StarFox64::run()
       log(DR_LOG_WARN, "players unreadable, Battle Royal shields left full");
   }
 
+  /* 1v3: Battle Royal already ends once the trio is down, but not when the solo
+   * is; then hand the win to a surviving trio member as the game would */
+  if (m_soloSlot >= 0 && !m_shieldsPending &&
+      m_retro->readValue(&state, SF64_VS_MATCH_STATE) == DR_OK &&
+      state == SF64_VS_STATE_PLAYING)
+  {
+    int64_t players = 0;
+
+    if (m_retro->readValue(&players, SF64_PLAYER) == DR_OK && players)
+    {
+      int survivor = -1;
+      bool solo_down = false;
+
+      for (unsigned slot = 0; slot < 4; slot++)
+      {
+        int32_t player_state = SF64_PLAYER_STATE_ACTIVE;
+        bool down;
+
+        m_retro->reads32(&player_state,
+          static_cast<size_t>(players) + slot * SF64_PLAYER_SIZE + SF64_PLAYER_STATE);
+        down = player_state == SF64_PLAYER_STATE_DOWN ||
+          player_state == SF64_PLAYER_STATE_VS_STANDBY;
+        if (static_cast<int>(slot) == m_soloSlot)
+          solo_down = down;
+        else if (!down && survivor < 0 && m_slotToIndex[slot] >= 0)
+          survivor = static_cast<int>(slot);
+      }
+
+      /* No survivor means the trio is down too; the game's own check calls it */
+      if (solo_down && survivor >= 0)
+      {
+        log(DR_LOG_INFO, qPrintable(QString("1v3: solo down, trio wins via slot %1")
+          .arg(survivor)));
+        m_retro->writeValue(survivor, SF64_VS_WINNER);
+        m_retro->writeValue(1, SF64_VS_MATCH_WON);
+        m_retro->writeValue(0, SF64_VS_DRAW_MODE);
+        m_retro->writeValue(0, SF64_VS_STATE_FRAMES);
+        m_retro->writeValue(SF64_VS_STATE_WINNER, SF64_VS_MATCH_STATE);
+        return;
+      }
+    }
+  }
+
   /* End the mini-game after the 60-frame debrief */
   if (m_minigameFrames < 30 ||
       m_retro->readValue(&state, SF64_VS_MATCH_STATE) != DR_OK ||
@@ -635,9 +707,20 @@ void StarFox64::run()
   /* Winner is the in-game player slot (0-3), or SF64_VS_WINNER_TIE */
   int64_t winner = SF64_VS_WINNER_TIE;
   m_retro->readValue(&winner, SF64_VS_WINNER);
-  m_winnerIndex = winner >= 0 && winner < 4 ? m_slotToIndex[winner] : -1;
-  log(DR_LOG_INFO, qPrintable(QString("match over: winner slot %1 -> player %2")
-    .arg(winner).arg(m_winnerIndex)));
+  if (winner >= 0 && winner < 4 && m_slotToIndex[winner] >= 0)
+  {
+    /* 1v3: a trio member's win is the whole trio's */
+    if (m_soloSlot >= 0 && winner != m_soloSlot)
+    {
+      for (unsigned slot = 0; slot < 4; slot++)
+        if (static_cast<int>(slot) != m_soloSlot && m_slotToIndex[slot] >= 0)
+          m_winners |= 1u << m_slotToIndex[slot];
+    }
+    else
+      m_winners = 1u << m_slotToIndex[winner];
+  }
+  log(DR_LOG_INFO, qPrintable(QString("match over: winner slot %1 -> players 0x%2")
+    .arg(winner).arg(m_winners, 0, 16)));
 
   finishMinigame();
 }
@@ -646,7 +729,7 @@ dr_minigame_result_t StarFox64::minigameResult(unsigned index)
 {
   dr_minigame_result_t result = { 0, 0 };
 
-  if (static_cast<int>(index) == m_winnerIndex)
+  if (index < 4 && (m_winners & (1u << index)))
     result.coins = 10;
 
   return result;
