@@ -427,12 +427,31 @@ typedef enum
 
   DR_MINIGAME_DUEL,
 
+  /**
+   * Mini-game where one player bets coins to play a gambling game
+   * Used in: 3
+   */
   DR_MINIGAME_GAME_GUY,
 
-  /* Board-event mini-games: the ones a Bowser or DK space fires off, rolled from
-   * their own pools rather than the regular roulette. */
+  /**
+   * Mini-game where players compete to survive, losers are punished
+   * Used in: 4 5 6 7
+   * @see `DR_MINIGAME_RESULT_BOWSER_FAILURE` and
+   *   `DR_MINIGAME_RESULT_BOWSER_SUCCESS`
+   */
   DR_MINIGAME_BOWSER,
+
+  /**
+   * Mini-game where players are rewarded coins with a multiplier
+   * Used in: 5 6 7
+   */
   DR_MINIGAME_DK,
+
+  /**
+   * Mini-game where two players work together to clear a challenge
+   * Used in: Wii Party, 9
+   */
+  DR_MINIGAME_PAIR,
 
   /**
    * A special mini-game that doesn't fit any of the categories and will
@@ -467,6 +486,8 @@ static inline const char *dr_minigame_type_name(dr_minigame_type t)
     return "Bowser";
   case DR_MINIGAME_DK:
     return "DK";
+  case DR_MINIGAME_PAIR:
+    return "Pair";
   case DR_MINIGAME_SPECIAL:
     return "Special";
   default:
