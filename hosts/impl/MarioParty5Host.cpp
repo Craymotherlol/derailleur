@@ -273,6 +273,8 @@ static DrGcnHostConfig makeConfig(const std::string &game)
   config.values.battle_ante[2] = { 0x8022a2a8, DR_VALUE_TYPE_S16 };
   config.values.battle_ante[3] = { 0x8022a3b0, DR_VALUE_TYPE_S16 };
   config.values.minigame_id = { 0x8022a4c4, DR_VALUE_TYPE_S16 };
+  config.values.turn_current = { 0x8022A494, DR_VALUE_TYPE_U8 };
+  config.values.turn_total = { 0x8022A495, DR_VALUE_TYPE_U8 };
   config.values.title_block = { MP5_TITLE_BLOCK, DR_VALUE_TYPE_POINTER };
   config.values.rng = { 0x8028800c, DR_VALUE_TYPE_U32 };
   config.values.timer = { 0x802885AC, DR_VALUE_TYPE_U32 };

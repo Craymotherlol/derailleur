@@ -621,6 +621,17 @@ void MarioPartyGcnHost::startMinigame(void)
   emit minigameRequested(m_Candidates[id], players);
 }
 
+void MarioPartyGcnHost::setCurrentTurn(unsigned turn)
+{
+  if (!m_config.values.turn_current.address)
+  {
+    log(DR_LOG_WARN, "set turn: this game has no turn counter configured");
+    return;
+  }
+  m_retro->writeValue(turn, m_config.values.turn_current);
+  log(DR_LOG_INFO, qPrintable(QString("set current turn to %1").arg(turn)));
+}
+
 bool MarioPartyGcnHost::readPlayerSetup(DrPlayerArray &players)
 {
   if (!m_config.values.character[0].address)

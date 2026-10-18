@@ -177,6 +177,7 @@ public:
     return sync;
   }
 
+  void setCurrentTurn(unsigned turn) override;
   bool readPlayerSetup(DrPlayerArray &players) override;
   bool writePlayerSetup(const DrPlayerArray &players) override;
 
