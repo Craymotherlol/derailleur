@@ -363,6 +363,25 @@ static inline QString dr_player_icon_32px(dr_host_platform platform, dr_characte
   return QString(":/assets/player-32px/gcwii/%1.png").arg(static_cast<int>(character));
 }
 
+/// Resource path for a player's panel portrait in `platform`'s art set (N64
+/// 28x28, DS 24x24, GameCube/Wii 64x64). A character missing from that set
+/// falls back to the GameCube/Wii panel, then to the 32px icon.
+static inline QString dr_player_panel(dr_host_platform platform, dr_character character)
+{
+  const QString path = QString(":/assets/player-panel/%1/%2.png")
+    .arg(QString::fromUtf8(dr_host_platform_dir(platform)))
+    .arg(static_cast<int>(character));
+  const QString gcwii_path = QString(":/assets/player-panel/gcwii/%1.png")
+    .arg(static_cast<int>(character));
+
+  if (QFile::exists(path))
+    return path;
+  if (QFile::exists(gcwii_path))
+    return gcwii_path;
+
+  return dr_player_icon_32px(platform, character);
+}
+
 typedef enum
 {
   DR_LOG_INFO = 0,

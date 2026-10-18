@@ -5,6 +5,8 @@
 #include <QImage>
 #include <QPainter>
 
+#include <cmath>
+
 /* ---- Match start / end ---- */
 
 /* u8 bool: in VS mode */
@@ -458,6 +460,13 @@ static const char *SF64_PLAYER_ICON_FILES[4][3] = {
   { "STARFOX64#8B5291E1#0#2_all.png", "STARFOX64#1E17CB0A#0#2_all.png", "STARFOX64#3E02E479#0#2_all.png" }
 };
 
+/* The game draws icon colors as about 20 + 213 * (c / 255)^0.51 (measured from
+ * the panels' 49 gray showing as 112, 0/140/148/189/255 as 20/177/181/203/233),
+ * so the icons are written through the inverse of that curve */
+static const double SF64_PLAYER_ICON_FLOOR = 20.0;
+static const double SF64_PLAYER_ICON_RANGE = 213.0;
+static const double SF64_PLAYER_ICON_GAMMA = 0.51;
+
 /* Icons are written at this integer multiple of the native size (GLideN64 needs
  * an exact integer upscale). */
 static const int SF64_HIRES_SCALE = 2;
@@ -743,11 +752,10 @@ void StarFox64::writePlayerIcon(unsigned slot, dr_character character)
   const QString destDir = QString::fromUtf8(SF64_HIRES_DIR);
   QDir().mkpath(destDir);
 
-  /* N64 hosts get the 28x28 N64 player panels (black-barred to fill the icon);
-   * GameCube/Wii hosts, or a character without a panel, get the GCN heads. */
-  const QString panelPath = QString(":/assets/player-panel/n64/%1.png").arg(static_cast<int>(character));
-  const bool usePanel = m_hostPlatform == DR_HOST_PLATFORM_N64 && QFile::exists(panelPath);
-  QImage art(usePanel ? panelPath : dr_player_icon_32px(m_hostPlatform, character));
+  /* Use the host platform's player panel (fit and centered inside the icon) */
+  const QString artPath = dr_player_panel(m_hostPlatform, character);
+  const bool usePanel = artPath.contains("/player-panel/");
+  QImage art(artPath);
   if (art.isNull())
   {
     log(DR_LOG_WARN, qPrintable(QString("no player icon for character %1")
@@ -780,6 +788,23 @@ void StarFox64::writePlayerIcon(unsigned slot, dr_character character)
     p.fillRect(left, top, innerW, innerH, usePanel ? Qt::black : Qt::transparent);
     p.setCompositionMode(QPainter::CompositionMode_SourceOver);
     p.drawImage(left + (innerW - scaled.width()) / 2, top + (innerH - scaled.height()) / 2, scaled);
+  }
+
+  /* Undo the game's brightening curve so the icon shows in its original colors */
+  {
+    uchar levels[256];
+    for (int level = 0; level < 256; level++)
+    {
+      const double shown = qBound(0.0, (level - SF64_PLAYER_ICON_FLOOR) / SF64_PLAYER_ICON_RANGE, 1.0);
+      const double value = 255.0 * std::pow(shown, 1.0 / SF64_PLAYER_ICON_GAMMA);
+      levels[level] = static_cast<uchar>(qBound(0.0, value + 0.5, 255.0));
+    }
+    for (int y = 0; y < h; y++)
+    {
+      QRgb *row = reinterpret_cast<QRgb*>(icon.scanLine(y));
+      for (int x = 0; x < w; x++)
+        row[x] = qRgba(levels[qRed(row[x])], levels[qGreen(row[x])], levels[qBlue(row[x])], qAlpha(row[x]));
+    }
   }
 
   for (unsigned part = 0; part < 3; part++)
