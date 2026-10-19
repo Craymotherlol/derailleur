@@ -59,6 +59,8 @@ static const dr_minigame_type MP8_MINIGAME_TYPE_TO_DR[] = {
 
 static const dr_scene_name_t MP8_SCENE_NAMES[] =
 {
+  { 0x00, "Booting up", true },
+
   { 0x04, "Star Carnival", false },
   { 0x05, "Board results", false },
   { 0x06, "Star Battle", false },

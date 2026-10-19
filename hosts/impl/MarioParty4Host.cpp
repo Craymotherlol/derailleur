@@ -44,7 +44,7 @@ static const dr_minigame_type MP4_MINIGAME_TYPE_TO_DR[] = {
 
 static const dr_scene_name_t MP4_SCENE_NAMES[] =
 {
-  // { 0x00, "_minigameDLL" },
+  { 0x00, "Booting up", true }, // _minigameDLL
   { 0x01, "Booting up", true }, // bootdll
   { 0x02, "E3 demo setup", true }, // e3setupDLL
   { 0x03, "Mini-Game explanation", true }, // instdll

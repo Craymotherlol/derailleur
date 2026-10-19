@@ -59,7 +59,7 @@ static const dr_minigame_type MP7_MINIGAME_TYPE_TO_DR[] = {
 
 static const dr_scene_name_t MP7_SCENE_NAMES[] =
 {
-  // { 0x00, "" },
+  { 0x00, "Booting up", true },
   // { 0x01, "" },
   // { 0x02, "" },
   // { 0x03, "" },
