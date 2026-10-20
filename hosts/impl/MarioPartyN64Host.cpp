@@ -335,7 +335,7 @@ void MarioPartyN64Host::run(void)
       m_retro->readValue(&minigame_type, m_config.values.title_type_duel);
       if (minigame_type != m_lastDuelType)
         emit logMessage(DR_LOG_INFO,
-          QString("duel mg type: 0x%1").arg(minigame_type, 2, 16, QChar('0')));
+          QString("duel minigame type: 0x%1").arg(minigame_type, 2, 16, QChar('0')));
       const bool toZero = (minigame_type == 0 && m_lastDuelType != 0);
       m_lastDuelType = minigame_type;
       if (toZero)
@@ -354,7 +354,7 @@ void MarioPartyN64Host::run(void)
     m_retro->readValue(&minigame_type, m_config.values.minigame_type);
     if (minigame_type != 0xFF)
       emit logMessage(DR_LOG_INFO,
-        QString("board mg type: 0x%1").arg(minigame_type, 2, 16, QChar('0')));
+        QString("board minigame type: 0x%1").arg(minigame_type, 2, 16, QChar('0')));
     if (minigame_type != 0xFF && minigame_type < m_config.minigame_type_to_dr_size)
     {
       dr_minigame_type mg_type = m_config.minigame_type_to_dr[minigame_type];
