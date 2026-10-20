@@ -438,8 +438,6 @@ void WiiParty::disableBackButton(void)
 {
   int64_t id = 0, instruction = 0;
 
-  /* Checked every frame: the REL arrives before it links, and the buttons are
-   * built a few frames after that. */
   if (m_retro->readValue(&id, WP_INST_MODULE) == DR_OK && id == WP_INST_MODULE_ID &&
       m_retro->readValue(&instruction, WP_BACK_BUTTON) == DR_OK &&
       instruction == WP_BACK_BUTTON_VALUE_OLD)
@@ -487,7 +485,7 @@ void WiiParty::run()
         .arg(m_minigame->scene_id).arg(m_minigameFrames)));
       applyControlRemap(m_minigame->quirks, m_players);
       if (dr_netplay_active())
-        m_resyncCountdown = 60;
+        m_resyncCountdown = 30;
     }
   }
   else if (!moduleAddress(static_cast<unsigned>(m_minigame->scene_id)))
