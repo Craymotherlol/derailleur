@@ -1055,6 +1055,9 @@ typedef struct
 
 /// Global, user-facing settings (persisted to derailleur.ini). Access the single
 /// instance through dr_settings_get(); load once at startup and save on change.
+/// dr_settings::resident_guests value that never unloads a guest.
+#define DR_RESIDENT_GUESTS_ALL 0xFFFFFFFFu
+
 struct dr_settings
 {
   /// Show the loading overlay (frozen frame + bouncing icon, see DrOverlay) that
@@ -1081,6 +1084,13 @@ struct dr_settings
   /// dr_apply_global_core_options). Off by default; the games were not made for
   /// it, so expect stretched HUDs and objects popping in at the edges.
   bool widescreen_hack = false;
+
+  /// How many of the most recently played guests keep their emulator loaded
+  /// between mini-games; older ones are unloaded and boot again when next picked.
+  /// Bounds memory over a long game (each guest core holds ~150-650 MB). 0 closes
+  /// every guest once its mini-game is over; DR_RESIDENT_GUESTS_ALL keeps them
+  /// all loaded, as before.
+  unsigned resident_guests = 2;
 };
 
 dr_settings &dr_settings_get(void);

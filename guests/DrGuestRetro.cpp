@@ -49,6 +49,15 @@ void DrGuestRetro::frameBegin(void)
   tick();
 }
 
+void DrGuestRetro::unload(void)
+{
+  if (!loaded() || m_minigameActive)
+    return;
+  m_retro->shutdown();
+  m_muteFrames = 0;
+  onUnloaded();
+}
+
 void DrGuestRetro::setRetro(DrRetro *retro)
 {
   m_retro = retro;

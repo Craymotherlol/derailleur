@@ -29,7 +29,14 @@ public:
     return m_retro ? m_retro->createWidget(parent) : nullptr;
   }
 
+  bool loaded() const override { return m_retro && m_retro->booted(); }
+  void unload() override;
+
 protected:
+  /// Called after unload(), for guests that remember first-boot work done in
+  /// the core (it's gone now, so the next launch must redo it).
+  virtual void onUnloaded() {}
+
   /// Applies the mini-game's quirks, then boots the core and applies `data`
   /// once it has run bootFrames().
   void boot(const DrGameData &data) override;

@@ -24,6 +24,7 @@ public:
 protected:
   void run(void) override;
   void doApplyGameData(const DrGameData &data) override;
+  void onUnloaded() override { m_firstBoot = true; }
 
 private:
   bool m_waitingForReady = false; /* setup done, holding overlay until ready flag */

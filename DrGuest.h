@@ -64,6 +64,13 @@ public:
   virtual void unpause() {}
   virtual QWidget *createWidget(QWidget *parent) { (void)parent; return nullptr; }
 
+  /// Whether the guest's emulator is loaded (it has launched and not been unloaded).
+  virtual bool loaded() const { return false; }
+
+  /// Frees the guest's emulator (core and content) while it's idle; its next
+  /// launch boots it again from scratch. GUI thread only.
+  virtual void unload() {}
+
   /// Per-frame driver: runs the finish countdown, then the guest's run().
   void tick();
 

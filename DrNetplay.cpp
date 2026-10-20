@@ -585,7 +585,10 @@ void DrNetplay::onFrameBegin(int context)
    * different number of host frames before the async launch pauses it. */
   {
     QMutexLocker lock(&m_RecvMutex);
-    while (context == m_FrozenContext && m_Active && !m_Abort)
+    /* A frozen guest whose core is being unloaded (see DrRetro::shutdown) must
+     * let its timing thread go, or QRetro::unloadCore waits on it forever */
+    QRetro *core = m_Contexts[context];
+    while (context == m_FrozenContext && m_Active && !m_Abort && (!core || core->isActive()))
       m_FrameReady.wait(&m_RecvMutex, 100);
     if (!m_Active || m_Abort)
       return;
@@ -654,6 +657,10 @@ void DrNetplay::onFrameBegin(int context)
       maybeFireLaunch(frame);
       return;
     }
+
+    /* Unloading: let the timing thread exit (see waitForFrame) */
+    if (QRetro *core = m_Contexts[context]; core && !core->isActive())
+      return;
 
     /* If there's a pending resync, service it and try again after */
     if (m_ResyncActive.load())
@@ -745,6 +752,11 @@ bool DrNetplay::waitForFrame(int context, quint64 frame)
      * host). This context is no longer gated, so stop waiting for input that will
      * never arrive instead of timing out and dropping the session. */
     if (context != m_ActiveContext)
+      return false;
+    /* The core is being unloaded (DrRetro::shutdown runs before the switch back to
+     * the host). Its peers may have frozen before sending this frame, so it would
+     * never arrive, and QRetro::unloadCore is joining this thread. */
+    if (QRetro *core = m_Contexts[context]; core && !core->isActive())
       return false;
     if (!barrier && timer.hasExpired(m_TimeoutMs))
       return false;

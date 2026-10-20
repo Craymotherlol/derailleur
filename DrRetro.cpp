@@ -247,6 +247,21 @@ bool DrRetro::boot(unsigned frames, std::function<void()> onBooted)
   return true;
 }
 
+void DrRetro::shutdown()
+{
+  if (!m_core || !m_booted)
+    return;
+
+  /* The QRetro object (its window, options, remaps and netplay hookup) stays;
+   * only the library, its content and its threads go. */
+  m_core->unloadCore();
+  m_booted = false;
+  m_bootCountdown = 0;
+  m_onBooted = nullptr;
+  clearFrameWrites();
+  log(DR_LOG_INFO, "core unloaded");
+}
+
 bool DrRetro::loadState(const char *name)
 {
   if (!m_core)

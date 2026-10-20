@@ -80,6 +80,14 @@ public:
   /// Whether a boot() countdown is in progress.
   bool booting() const { return m_bootCountdown > 0; }
 
+  /// Whether the core is loaded (boot() has run and shutdown() hasn't since).
+  bool booted() const { return m_booted; }
+
+  /// Unloads a booted core and its content to give back their memory; the next
+  /// boot() loads both again from scratch. GUI thread only, and only while the
+  /// core isn't in use (not the current context).
+  void shutdown();
+
   /// Loads dr_state_directory()/<name>.state.zip, logs the result, and returns
   /// whether it loaded.
   bool loadState(const char *name);

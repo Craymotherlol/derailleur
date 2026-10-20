@@ -186,7 +186,22 @@ bool DrGuestList::activateGuest(DrGuest *guest)
   if (idx < 0)
     return false;
   m_activeGuest = guest;
+  m_recent.removeAll(guest);
+  m_recent.prepend(guest);
   setCurrentIndex(idx);
   return true;
+}
+
+void DrGuestList::unloadIdleGuests(unsigned keep)
+{
+  for (int i = 0; i < m_recent.size(); i++)
+  {
+    DrGuest *guest = m_recent[i];
+
+    if (static_cast<unsigned>(i) < keep || !guest->loaded() || guest->minigameActive())
+      continue;
+    guest->unload();
+    log(DR_LOG_INFO, qPrintable(QString("unloaded idle guest %1").arg(guest->name())));
+  }
 }
 

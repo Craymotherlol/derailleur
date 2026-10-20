@@ -531,6 +531,11 @@ void MainWindow::showHost()
     holdView(guest->core());
 
   switchView([this]() {
+    /* Free idle guests while the overlay still covers the switch and the board is
+     * held; every peer does it at this point, and the barrier below absorbs any
+     * difference in how long it takes. The overlay shows a frame grabbed from the
+     * guest already (holdView), and its QRetro window survives the unload. */
+    m_Guests->unloadIdleGuests(dr_settings_get().resident_guests);
     m_Netplay->setActiveContext(m_Host->core());
     m_Host->unpause();
     m_Stack->setCurrentWidget(m_HostContainer);

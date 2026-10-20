@@ -34,6 +34,8 @@ void dr_settings_load(void)
     s.value("settings/res_scale_gcn", g_settings.res_scale_gcn).toUInt();
   g_settings.res_scale_ds =
     s.value("settings/res_scale_ds", g_settings.res_scale_ds).toUInt();
+  g_settings.resident_guests =
+    s.value("settings/resident_guests", g_settings.resident_guests).toUInt();
 }
 
 void dr_settings_save(void)
@@ -46,6 +48,7 @@ void dr_settings_save(void)
   s.setValue("settings/res_scale_n64", g_settings.res_scale_n64);
   s.setValue("settings/res_scale_gcn", g_settings.res_scale_gcn);
   s.setValue("settings/res_scale_ds", g_settings.res_scale_ds);
+  s.setValue("settings/resident_guests", g_settings.resident_guests);
   s.sync();
 }
 

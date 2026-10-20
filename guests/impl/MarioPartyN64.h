@@ -169,6 +169,8 @@ protected:
   /// Snapshots the booted game to m_config.temp_state.
   void captureBootState(void);
   void doApplyGameData(const DrGameData &data) override;
+  /* The boot snapshot stays valid for a reloaded core; only the cold-boot path resets */
+  void onUnloaded() override { m_booted = false; }
   MpN64Config m_config;
   int16_t m_lastScene = -1;
   /// Last non-zero value seen in each result field while the mini-game ran.

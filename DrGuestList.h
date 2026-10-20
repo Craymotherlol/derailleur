@@ -30,6 +30,11 @@ public:
   DrGuest *pickMinigame(
     dr_minigame_type type, dr_mic_mode mic, const dr_mp_minigame_t *&outMinigame);
   bool activateGuest(DrGuest *guest);
+
+  /// Unloads every guest's emulator except the `keep` most recently launched,
+  /// to bound memory over a long game (0 unloads them all). Call between
+  /// mini-games, once the board's view is up.
+  void unloadIdleGuests(unsigned keep);
   void logSummary();
 
   /// Replaces the set of disabled mini-games from an opaque payload produced by
@@ -55,6 +60,7 @@ private:
   }
   QList<DrGuest *> m_guests;
   DrGuest *m_activeGuest = nullptr;
+  QList<DrGuest *> m_recent; /* launched guests, most recent first */
   QSet<dr_minigame_key_t> m_disabled; /* disabled mini-game keys, see dr_minigame_key */
 
   /* Rolled candidate cache, indexed by dr_minigame_type then dr_mic_mode. Every
