@@ -20,6 +20,9 @@ public:
     if (!m_core)
       return;
 
+    /* JIT fastmem relies on a SIGSEGV handler that guest cores can clobber */
+    m_core->options()->setOptionValue("melonds_jit_fast_memory", "disabled");
+
     /* Disallow changing the screen layout by default */
     m_core->options()->setOptionValue("melonds_number_of_screen_layouts", "1");
     m_core->options()->setOptionValue("melonds_render_mode", "opengl");
