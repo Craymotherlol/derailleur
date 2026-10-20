@@ -136,6 +136,7 @@ bool DrNetplay::eventFilter(QObject *watched, QEvent *event)
 void DrNetplay::hostSession(quint16 port, int playerCount)
 {
   m_IsServer = true;
+  dr_set_netplay_server(true);
   m_PeerIndex = 0;
   m_PeerCount = qBound(1, playerCount, DR_NETPLAY_MAX_PEERS);
   m_NextAssignIndex = 1;
@@ -473,6 +474,7 @@ void DrNetplay::freezeActiveContext()
 void DrNetplay::joinSession(const QString &address, quint16 port)
 {
   m_IsServer = false;
+  dr_set_netplay_server(false);
 
   auto *sock = new QTcpSocket(this);
   m_Sockets.append(sock);

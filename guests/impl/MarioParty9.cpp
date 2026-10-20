@@ -341,9 +341,7 @@ void MarioParty9::run()
 
   m_minigameFrames++;
 
-  /* Hold the pointer layout until the mini-game starts, then swap to its
-   * preferred controls. Ignore the value for the first frames so one carried in
-   * by the savestate can't swap us immediately. */
+  /* Use pointer control until start is pressed */
   if (!m_controlsApplied && m_minigame && m_minigameFrames >= 60)
   {
     int64_t started = -1;
@@ -352,13 +350,12 @@ void MarioParty9::run()
       applyControlRemap(m_minigame->quirks, m_players);
       m_controlsApplied = true;
       if (dr_netplay_active())
-        m_resyncCountdown = 180;
+        m_resyncCountdown = 120;
     }
   }
 
-  /* Hold the resync ~3s past the start so it lands on the running mini-game
-   * rather than the frame the controls swap on. */
-  if (m_resyncCountdown > 0 && --m_resyncCountdown == 0)
+  /* Resync peers */
+  if (m_resyncCountdown > 0 && --m_resyncCountdown == 0 && dr_netplay_is_server())
     emit hardResync();
 
   if (!m_finishScheduled)

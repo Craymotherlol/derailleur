@@ -467,9 +467,8 @@ void WiiParty::run()
   m_minigameFrames++;
   recolorNewModules(true);
 
-  /* Hold the resync ~3s past the module load so it lands on the running
-   * mini-game rather than the frame the controls swap on. */
-  if (m_resyncCountdown > 0 && --m_resyncCountdown == 0)
+  /* Resync peers */
+  if (m_resyncCountdown > 0 && --m_resyncCountdown == 0 && dr_netplay_is_server())
     emit hardResync();
 
   if (!m_minigame || m_finishScheduled)
@@ -477,8 +476,6 @@ void WiiParty::run()
 
   if (!m_moduleSeen)
   {
-    /* The explanation screen resets CPU levels from the global setting just
-     * before it loads the mini-game, so keep ours in place until it's loaded. */
     writePlayers();
 
     const size_t module = moduleAddress(static_cast<unsigned>(m_minigame->scene_id));
@@ -490,7 +487,7 @@ void WiiParty::run()
         .arg(m_minigame->scene_id).arg(m_minigameFrames)));
       applyControlRemap(m_minigame->quirks, m_players);
       if (dr_netplay_active())
-        m_resyncCountdown = 180;
+        m_resyncCountdown = 60;
     }
   }
   else if (!moduleAddress(static_cast<unsigned>(m_minigame->scene_id)))

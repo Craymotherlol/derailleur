@@ -1107,6 +1107,10 @@ void dr_srand(unsigned seed);
 bool dr_netplay_active(void);
 void dr_set_netplay_active(bool active);
 
+/// Whether this instance is the server of an active netplay session.
+bool dr_netplay_is_server(void);
+void dr_set_netplay_server(bool server);
+
 int dr_rand(void);
 
 unsigned long dr_rand_count(void);

@@ -54,6 +54,7 @@ static QString cores_dir = "cores";
 static QString state_dir = "state";
 static QString save_dir = "save";
 static bool netplay_active = false;
+static bool netplay_server = false;
 
 bool dr_netplay_active(void)
 {
@@ -63,6 +64,16 @@ bool dr_netplay_active(void)
 void dr_set_netplay_active(bool active)
 {
   netplay_active = active;
+}
+
+bool dr_netplay_is_server(void)
+{
+  return netplay_active && netplay_server;
+}
+
+void dr_set_netplay_server(bool server)
+{
+  netplay_server = server;
 }
 
 QString dr_roms_directory(void)
