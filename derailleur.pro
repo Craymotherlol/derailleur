@@ -103,6 +103,7 @@ SOURCES += \
     guests/impl/MarioParty9.cpp \
     guests/impl/MarioPartyGcn.cpp \
     guests/impl/MarioTennis.cpp \
+    guests/impl/MaryKateAndAshleySweet16LicensedToDrive.cpp \
     guests/impl/PokemonStadium.cpp \
     guests/impl/PokemonStadium2.cpp \
     guests/impl/SmashRemix.cpp \
@@ -185,6 +186,7 @@ HEADERS += \
     guests/impl/MarioParty9.h \
     guests/impl/MarioPartyGcn.h \
     guests/impl/MarioTennis.h \
+    guests/impl/MaryKateAndAshleySweet16LicensedToDrive.h \
     guests/impl/PokemonStadium.h \
     guests/impl/PokemonStadium2.h \
     guests/impl/SmashRemix.h \

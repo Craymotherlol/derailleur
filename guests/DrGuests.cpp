@@ -18,6 +18,7 @@
 #include "impl/MarioParty9.h"
 #include "impl/MarioPartyAdvance.h"
 #include "impl/MarioTennis.h"
+#include "impl/MaryKateAndAshleySweet16LicensedToDrive.h"
 #include "impl/PokemonStadium.h"
 #include "impl/PokemonStadium2.h"
 #include "impl/SmashRemix.h"
@@ -56,6 +57,7 @@ void dr_create_guests(DrGuestList *list)
   dr_add(list, new MarioParty9());
   dr_add(list, new MarioPartyAdvance());
   dr_add(list, new MarioTennis());
+  dr_add(list, new MaryKateAndAshleySweet16LicensedToDrive());
 
   dr_add(list, new PokemonStadium());
   dr_add(list, new PokemonStadium2());
