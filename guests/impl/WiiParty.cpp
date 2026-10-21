@@ -5,9 +5,25 @@
 
 static const dr_value_t WP_MINIGAME_ID = { 0x80235D8C, DR_VALUE_TYPE_S32 };
 
-/// s32 - Game mode. 4P mini-games write win flags to the result field in mode 0
-/// and 0-based placements in every other mode.
+/// s32 - Game mode; mini-games check it to decide what, if anything, to write to the
+/// result field. Free play (menu.rel) sets it from the mini-game id via 0x80007960.
 static const dr_value_t WP_MODE = { 0x80235D90, DR_VALUE_TYPE_S32 };
+
+/// 4P outside free play: win flags
+static const int32_t WP_MODE_4P = 0;
+/// Pair outside free play, and some pair games in free play: pass/fail flag
+static const int32_t WP_MODE_PAIR = 1;
+/// 1v3 in free play. 1v3 games write win flags in every mode.
+static const int32_t WP_MODE_FREE_1V3 = 2;
+/// Duel in free play: win flags. Some duels write no result in any other mode.
+static const int32_t WP_MODE_FREE_DUEL = 3;
+/// 4P in free play: 0-based placements
+static const int32_t WP_MODE_FREE_4P = 5;
+/// Pair in free play: grade 0-3. Pair games write 0 in modes other than 1 and 6.
+static const int32_t WP_MODE_FREE_PAIR = 6;
+
+/// Pair games free play still runs in WP_MODE_PAIR (list at 0x80208078)
+static const int32_t WP_PAIR_FLAG_MINIGAMES[] = { 204, 210, 211, 216, 218, 222, 223 };
 
 /// u8 - Number of players taking part; slots past it sit out
 static const dr_value_t WP_PLAYER_COUNT = { 0x80235D94, DR_VALUE_TYPE_U8 };
@@ -77,6 +93,27 @@ static uint32_t wp_rgba(dr_character character, bool dark)
 
   return ((color.red * scale / 10) << 24) | ((color.green * scale / 10) << 16) |
     ((color.blue * scale / 10) << 8) | 0xFF;
+}
+
+/// The mode free play would set for this mini-game (0x80007960 with the free play scene)
+static int32_t wp_mode(const dr_mp_minigame_t *minigame)
+{
+  unsigned i;
+
+  switch (minigame->type)
+  {
+  case DR_MINIGAME_DUEL:
+    return WP_MODE_FREE_DUEL;
+  case DR_MINIGAME_PAIR:
+    for (i = 0; i < sizeof(WP_PAIR_FLAG_MINIGAMES) / sizeof(WP_PAIR_FLAG_MINIGAMES[0]); i++)
+      if (minigame->minigame_id == WP_PAIR_FLAG_MINIGAMES[i])
+        return WP_MODE_PAIR;
+    return WP_MODE_FREE_PAIR;
+  case DR_MINIGAME_1V3:
+    return WP_MODE_FREE_1V3;
+  default:
+    return WP_MODE_FREE_4P;
+  }
 }
 
 static int32_t wp_cpu_level(dr_difficulty difficulty)
@@ -407,6 +444,7 @@ void WiiParty::logResults(void)
 
 void WiiParty::recolorNewModules(bool recolor)
 {
+  QSet<unsigned> loaded;
   int64_t node = 0;
   unsigned i;
 
@@ -419,6 +457,7 @@ void WiiParty::recolorNewModules(bool recolor)
 
     if (m_retro->readValue(&id, { static_cast<size_t>(node), DR_VALUE_TYPE_U32 }) != DR_OK)
       return;
+    loaded.insert(static_cast<unsigned>(id));
     if (!m_recoloredModules.contains(static_cast<unsigned>(id)))
     {
       m_recoloredModules.insert(static_cast<unsigned>(id));
@@ -432,6 +471,9 @@ void WiiParty::recolorNewModules(bool recolor)
     if (m_retro->readValue(&node, { static_cast<size_t>(node) + 4, DR_VALUE_TYPE_POINTER }) != DR_OK)
       return;
   }
+
+  /* Forget unloaded modules; inst.rel unloads for the mini-game and reloads stock for the results */
+  m_recoloredModules.intersect(loaded);
 }
 
 void WiiParty::disableBackButton(void)
@@ -511,6 +553,7 @@ void WiiParty::doApplyGameData(const DrGameData &data)
   recolorNewModules(false);
 
   m_retro->writeValue(data.minigame->minigame_id, WP_MINIGAME_ID);
+  m_retro->writeValue(wp_mode(data.minigame), WP_MODE);
   assignSlots();
   writePlayers();
   writeColors();
@@ -541,8 +584,7 @@ dr_minigame_result_t WiiParty::minigameResult(unsigned index)
 
   m_retro->readValue(&mode, WP_MODE);
 
-  if (m_minigame && mode != 0 &&
-      (m_minigame->type == DR_MINIGAME_4P || m_minigame->type == DR_MINIGAME_1V3))
+  if (m_minigame && m_minigame->type == DR_MINIGAME_4P && mode == WP_MODE_FREE_4P)
   {
     /* Placements: everyone in 1st wins */
     if (mine == 0)
@@ -552,7 +594,7 @@ dr_minigame_result_t WiiParty::minigameResult(unsigned index)
   {
     int64_t best = 0;
 
-    /* Win flags or pair grades: the highest result wins */
+    /* Win flags, pass/fail or pair grades: the highest result wins */
     for (i = 0; i < 4; i++)
     {
       int64_t value = 0;

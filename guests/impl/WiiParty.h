@@ -56,7 +56,7 @@ private:
   /// Game slot and team for each board player, from assignSlots()
   unsigned m_slotOf[4] = { 0, 1, 2, 3 };
   int32_t m_teamOf[4] = { 0, 1, 2, 3 };
-  /// Ids of modules already recolored this launch
+  /// Ids of loaded modules already recolored; dropped when they unload so a reload is recolored
   QSet<unsigned> m_recoloredModules;
 };
 
