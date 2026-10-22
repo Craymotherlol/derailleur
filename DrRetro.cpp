@@ -3,6 +3,50 @@
 #include <QFile>
 #include <QWidget>
 
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <psapi.h>
+#endif
+
+/* The process's memory, for the log lines around core loads and unloads */
+static QString dr_memory_usage(void)
+{
+#ifdef _WIN32
+  PROCESS_MEMORY_COUNTERS_EX pmc = {};
+
+  pmc.cb = sizeof(pmc);
+  if (!K32GetProcessMemoryInfo(GetCurrentProcess(),
+        reinterpret_cast<PROCESS_MEMORY_COUNTERS *>(&pmc), sizeof(pmc)))
+    return "unavailable";
+
+  return QString("%1 MiB working set, %2 MiB private")
+    .arg(static_cast<qulonglong>(pmc.WorkingSetSize >> 20))
+    .arg(static_cast<qulonglong>(pmc.PrivateUsage >> 20));
+#else
+  QFile status("/proc/self/status");
+  qlonglong rss = -1, swap = 0;
+
+  if (!status.open(QIODevice::ReadOnly | QIODevice::Text))
+    return "unavailable";
+
+  /* Lines look like "VmRSS:    123456 kB" */
+  for (const QByteArray &line : status.readAll().split('\n'))
+  {
+    if (line.startsWith("VmRSS:"))
+      rss = line.mid(6).trimmed().split(' ').first().toLongLong();
+    else if (line.startsWith("VmSwap:"))
+      swap = line.mid(7).trimmed().split(' ').first().toLongLong();
+  }
+  if (rss < 0)
+    return "unavailable";
+
+  return QString("%1 MiB resident, %2 MiB swap").arg(rss >> 10).arg(swap >> 10);
+#endif
+}
+
 void dr_apply_global_core_options(QRetro *core, dr_core which)
 {
   const bool widescreen = dr_settings_get().widescreen_hack;
@@ -239,6 +283,7 @@ bool DrRetro::boot(unsigned frames, std::function<void()> onBooted)
        * nudge runs on the GUI thread, after it. */
       if (m_onBooted)
         m_onBooted();
+      log(DR_LOG_INFO, qPrintable("core loaded, memory: " + dr_memory_usage()));
       QMetaObject::invokeMethod(this, [this]() { resizeToContainer(); },
         Qt::QueuedConnection);
     }, Qt::DirectConnection);
@@ -259,7 +304,7 @@ void DrRetro::shutdown()
   m_bootCountdown = 0;
   m_onBooted = nullptr;
   clearFrameWrites();
-  log(DR_LOG_INFO, "core unloaded");
+  log(DR_LOG_INFO, qPrintable("core unloaded, memory: " + dr_memory_usage()));
 }
 
 bool DrRetro::loadState(const char *name)

@@ -1054,8 +1054,6 @@ typedef struct
   dr_value_type type;
 } dr_value_t;
 
-/// Global, user-facing settings (persisted to derailleur.ini). Access the single
-/// instance through dr_settings_get(); load once at startup and save on change.
 /// dr_settings::resident_guests value that never unloads a guest.
 #define DR_RESIDENT_GUESTS_ALL 0xFFFFFFFFu
 
@@ -1088,10 +1086,7 @@ struct dr_settings
 
   /// How many of the most recently played guests keep their emulator loaded
   /// between mini-games; older ones are unloaded and boot again when next picked.
-  /// Bounds memory over a long game (each guest core holds ~150-650 MB). 0 closes
-  /// every guest once its mini-game is over; DR_RESIDENT_GUESTS_ALL keeps them
-  /// all loaded, as before.
-  unsigned resident_guests = 2;
+  unsigned resident_guests = 0;
 };
 
 dr_settings &dr_settings_get(void);
