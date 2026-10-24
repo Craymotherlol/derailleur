@@ -154,7 +154,7 @@ protected:
   /// together, and with the option off the shipped savestate is used instead.
   bool bootsWithoutState(void) const
   {
-    return dr_settings_get().character_injection && m_config.boot_patches[0].when.address != 0;
+    return m_injection && m_config.boot_patches[0].when.address != 0;
   }
   /// Builds m_config.temp_rom with Waluigi and/or Daisy in the slots the players
   /// who picked them resolve to, and points gamePath() at it. Runs once.
@@ -205,6 +205,9 @@ protected:
   /// The rebuilt ROM to boot instead of m_config.rom, and whether the build has
   /// been attempted. Empty path = boot the stock ROM.
   bool m_romBuilt = false;
+
+  /// The Waluigi/Daisy option as of the last launch (see bootsWithoutState).
+  bool m_injection = false;
 
   /// Board player index -> game slot, identity unless remapSlots() says otherwise.
   int m_slotOf[4] = { 0, 1, 2, 3 };

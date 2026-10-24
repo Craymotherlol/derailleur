@@ -298,6 +298,16 @@ void MarioPartyN64::onBeforeBoot(const DrGameData &data)
   /* Runs on every launch, but the ROM is only built ahead of the first boot:
    * gamePath() is read right after this returns, and a relaunch keeps whatever
    * was built then. */
+  if (m_config.boot_patches[0].when.address != 0 &&
+      m_injection != dr_settings_get().character_injection)
+  {
+    unload();
+    m_injection = dr_settings_get().character_injection;
+    m_romBuilt = false;
+    m_bootStateSaved = false;
+    m_retro->setGamePath((dr_roms_directory() + "/" + m_config.rom).toStdString());
+  }
+
   if (m_romBuilt || m_config.temp_rom.empty() || !bootsWithoutState())
     return;
 

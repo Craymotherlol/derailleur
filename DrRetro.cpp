@@ -1,6 +1,8 @@
 #include "DrRetro.h"
 
 #include <QFile>
+#include <QList>
+#include <QPointer>
 #include <QWidget>
 
 #ifdef _WIN32
@@ -47,6 +49,23 @@ static QString dr_memory_usage(void)
 #endif
 }
 
+typedef struct
+{
+  QPointer<QRetro> core;
+  dr_core which;
+} dr_global_options_core_t;
+
+static QList<dr_global_options_core_t> global_options_cores;
+
+void dr_reapply_global_core_options(void)
+{
+  const QList<dr_global_options_core_t> cores = global_options_cores;
+
+  for (const dr_global_options_core_t &entry : cores)
+    if (entry.core)
+      dr_apply_global_core_options(entry.core, entry.which);
+}
+
 void dr_apply_global_core_options(QRetro *core, dr_core which)
 {
   const bool widescreen = dr_settings_get().widescreen_hack;
@@ -58,9 +77,15 @@ void dr_apply_global_core_options(QRetro *core, dr_core which)
     { nullptr, nullptr },
   };
   const dr_core_option_t *option;
+  int i;
 
   if (!core || !core->options())
     return;
+
+  for (i = global_options_cores.size() - 1; i >= 0; i--)
+    if (!global_options_cores[i].core || global_options_cores[i].core == core)
+      global_options_cores.removeAt(i);
+  global_options_cores.append({ core, which });
 
   for (option = options; option->key; option++)
     core->options()->setOptionValue(option->key, option->value);
@@ -96,12 +121,11 @@ void dr_apply_global_core_options(QRetro *core, dr_core which)
     break;
   }
 
+  core->setForcedAspectRatio(widescreen && widens ? 16.0 / 9.0 : 0.0);
   if (!widescreen)
-    return;
+    core->setSourceCrop(0.0, 0.0, 0.0, 0.0);
   else
   {
-    core->setForcedAspectRatio(widescreen && widens ? 16.0 / 9.0 : 0.0);
-
     /* Crop weirdness and overscan */
     if (which == DR_CORE_DOLPHIN)
     {

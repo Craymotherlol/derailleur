@@ -6,8 +6,7 @@
 /**
  * The "Settings" tool page: user-facing options backed by the global dr_settings
  * (see DrCommon). Toggling a control updates the struct and persists it to
- * derailleur.ini immediately. Options that only apply at startup are labelled as
- * needing a restart.
+ * derailleur.ini immediately.
  */
 class DrSettings : public QWidget
 {

@@ -24,6 +24,10 @@ void dr_apply_wii_control(QRetroInputJoypad &jp, dr_wii_control control);
 /// the core's own ini would otherwise outlive the user turning it back off.
 void dr_apply_global_core_options(QRetro *core, dr_core which);
 
+/// Pushes the current global core options into every QRetro that has had them
+/// applied, so a changed setting reaches cores that already exist.
+void dr_reapply_global_core_options(void);
+
 class DrRetro : public QObject
 {
   Q_OBJECT

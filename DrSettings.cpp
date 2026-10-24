@@ -1,6 +1,7 @@
 #include "DrSettings.h"
 
 #include "DrCommon.h"
+#include "DrRetro.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -76,27 +77,36 @@ DrSettings::DrSettings(QWidget *parent)
   QGroupBox *graphics = new QGroupBox(tr("Graphics"), this);
   QVBoxLayout *graphicsLayout = new QVBoxLayout(graphics);
 
-  graphicsLayout->addWidget(settings_checkbox(graphics, tr("Widescreen hack"),
+  QCheckBox *widescreen = settings_checkbox(graphics, tr("Widescreen hack"),
     tr("Render every game at 16:9 instead of the 4:3 they were made for.\n"
        "Stretches some HUDs and lets objects pop in at the edges of the screen."),
-    &dr_settings::widescreen_hack));
+    &dr_settings::widescreen_hack);
+
+  connect(widescreen, &QCheckBox::toggled, this, []() { dr_reapply_global_core_options(); });
+  graphicsLayout->addWidget(widescreen);
   graphicsLayout->addWidget(settings_note(graphics,
-    tr("Requires restart of the program. Play Nintendo 64 and GameCube games in simulated widescreen.")));
+    tr("Play Nintendo 64 and GameCube games in simulated widescreen.")));
 
   /* Native heights: N64 240p, GameCube/Wii 480p, DS 192p per screen. */
   QGroupBox *resolution = new QGroupBox(tr("Internal resolution"), graphics);
   QVBoxLayout *resolutionLayout = new QVBoxLayout(resolution);
   QFormLayout *resolutions = new QFormLayout();
 
-  resolutions->addRow(tr("Nintendo 64"),
-    settings_scale_combo(resolution, 240, 8, 2, &dr_settings::res_scale_n64));
-  resolutions->addRow(tr("GameCube / Wii"),
-    settings_scale_combo(resolution, 480, 6, 1, &dr_settings::res_scale_gcn));
-  resolutions->addRow(tr("Nintendo DS"),
-    settings_scale_combo(resolution, 192, 8, 2, &dr_settings::res_scale_ds));
+  QComboBox *scales[] = {
+    settings_scale_combo(resolution, 240, 8, 2, &dr_settings::res_scale_n64),
+    settings_scale_combo(resolution, 480, 6, 1, &dr_settings::res_scale_gcn),
+    settings_scale_combo(resolution, 192, 8, 2, &dr_settings::res_scale_ds),
+  };
+
+  for (QComboBox *scale : scales)
+    connect(scale, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+      []() { dr_reapply_global_core_options(); });
+  resolutions->addRow(tr("Nintendo 64"), scales[0]);
+  resolutions->addRow(tr("GameCube / Wii"), scales[1]);
+  resolutions->addRow(tr("Nintendo DS"), scales[2]);
   resolutionLayout->addLayout(resolutions);
   resolutionLayout->addWidget(settings_note(resolution,
-    tr("Requires restart of the program. Higher costs GPU time, and a few mini-games "
+    tr("Higher costs GPU time, and a few mini-games "
        "force their own resolution to render correctly.")));
   graphicsLayout->addWidget(resolution);
   layout->addWidget(graphics);
