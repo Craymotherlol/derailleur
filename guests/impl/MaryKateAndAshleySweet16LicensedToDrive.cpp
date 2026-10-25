@@ -8,6 +8,9 @@
 
 static const char *MKA_TEXTURE_DIR = "/User/Load/Textures/GMAE51";
 
+/* Number of frames to mute audio for once a mini-game starts */
+#define MKA_MUTE_FRAMES 120
+
 typedef struct
 {
   /* Replacement file names and bundled sources, indexed by mka_character */
@@ -464,6 +467,10 @@ void MaryKateAndAshleySweet16LicensedToDrive::run(void)
     return;
 
   m_minigameFrames++;
+  if (m_minigameFrames <= MKA_MUTE_FRAMES)
+    if (auto *audio = core()->audio())
+      audio->setMute(m_minigameFrames < MKA_MUTE_FRAMES);
+
   if (m_finishPending || m_minigameFrames < 120 ||
       m_retro->readValue(&winner, MKA_RESULT_WINNER[0]) != DR_OK || winner < 0)
     return;
