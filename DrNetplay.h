@@ -7,6 +7,7 @@
 #include <QMutex>
 #include <QObject>
 #include <QPair>
+#include <QSet>
 #include <QString>
 #include <QStringList>
 #include <QWaitCondition>
@@ -65,7 +66,13 @@ typedef enum
   DR_NETPLAY_PACKET_GOLF,
 
   /* var: [u64 frame][opaque]; frame 0 = client request */
-  DR_NETPLAY_PACKET_LAUNCH
+  DR_NETPLAY_PACKET_LAUNCH,
+
+  /* either direction: var-length [u8 dr_guest]... the sender owns */
+  DR_NETPLAY_PACKET_OWNED_GUESTS,
+
+  /* server -> clients: var: [u8 dr_setting_id][u32 value]... host-inherited settings */
+  DR_NETPLAY_PACKET_SETTINGS
 } dr_netplay_packet_type;
 
 /* Maximum peers in a session (also the per-frame input array width). */
@@ -156,6 +163,13 @@ public:
   bool isServer() const { return m_IsServer; }
   bool active() const { return m_Active; }
 
+  /// Whether a netplay session is active, for code without a DrNetplay handle
+  /// (e.g. guests) to gate netplay-only behavior.
+  static bool sessionActive(void) { return s_Instance && s_Instance->m_Active; }
+
+  /// Whether this instance is the server of an active netplay session.
+  static bool sessionServer(void) { return sessionActive() && s_Instance->m_IsServer; }
+
   /// Schedules a debug-menu mini-game launch so every peer runs it on the same gated
   /// frame. `payload` is an opaque blob (the app serializes guest/mini-game/players);
   /// the server assigns a target frame DR_NETPLAY_LAUNCH_DELAY ahead and broadcasts it,
@@ -196,6 +210,14 @@ public:
   /// relay. Emits minigameFilterReceived locally so the caller applies it too.
   void setMinigameFilter(const QByteArray &payload);
 
+  /// Sets the guests (dr_guest values) this install owns, reported to the other
+  /// side of each connection. Call before hosting or joining.
+  void setOwnedGuests(const QSet<int> &guests);
+
+  /// Server only: sends the settings every peer must share (see DrSettings) to
+  /// every client. Call when one of them changes on the host.
+  void broadcastSettings(void);
+
   /// Re-targets an existing physical (e.g. SDL3) backend so it samples local
   /// hardware into our private joypad array instead of a core's array.
   void setLocalSource(QRetroInputBackend *backend);
@@ -231,6 +253,12 @@ signals:
   /// the timing thread (like the host launch's DirectConnection freeze), so the handler
   /// only deserializes `payload` and launches the mini-game on the GUI thread.
   void debugLaunchReady(QByteArray payload);
+  /// Server: the owned guests at least one connected client is missing.
+  void missingGuestsChanged(QSet<int> guests);
+  /// Client: the guests the host owns.
+  void hostGuestsReceived(QSet<int> guests);
+  /// Client: the host's shared settings have been applied to DrSettings.
+  void hostSettingsReceived(void);
   /// Diagnostic log; level matches DrLogger::message (DR_LOG_*).
   void logMessage(unsigned level, const QString &msg);
 
@@ -275,6 +303,11 @@ private:
   void handleMessage(QTcpSocket *sock, quint8 type, const QByteArray &payload);
   void dropSession(const QString &reason);
 
+  /// Server: recomputes the guests a client is missing and emits missingGuestsChanged.
+  void updateMissingGuests(void);
+  static QByteArray encodeGuests(const QSet<int> &guests);
+  static QSet<int> decodeGuests(const QByteArray &payload);
+
   /// Server: compares `p`'s sync validator against the first sample seen for its frame
   /// and hard-resyncs on a mismatch. Called from recordPacket with m_RecvMutex held.
   void checkSyncSample(const DrNetplayPacket &p);
@@ -286,6 +319,8 @@ private:
   static DrNetplayPacket packetFromJoypad(
     QRetroInputJoypad &jp, int peerIndex, int context, quint64 frame);
   static void applyPacketToJoypad(const DrNetplayPacket &p, QRetroInputJoypad &jp);
+
+  static DrNetplay *s_Instance; // the one DrNetplay, for sessionActive/sessionServer
 
   DrInputStore *m_Store = nullptr;
 
@@ -316,6 +351,9 @@ private:
   // allowed. The server re-sends this at session start so every client gets it
   // at least once.
   QByteArray m_MinigameFilter;
+
+  QSet<int> m_OwnedGuests;
+  QHash<QTcpSocket *, QSet<int>> m_PeerGuests; // server: each client's owned guests
 
   // Per-context state. attachCore() assigns each QRetro a context id in a
   // deterministic order (host first, then guests), identical across peers.
@@ -372,7 +410,7 @@ private:
   int m_ResyncCtx = -1;
   bool m_ResyncStateReady = false;
   quint64 m_ResyncFrame = 0;
-  quint32 m_ResyncRandState = 0; // host's dr_rand state to restore alongside the savestate
+  quint32 m_ResyncRandState = 0; // host's DrRandom state to restore alongside the savestate
   quint64 m_ResyncRandCount = 0;
   QByteArray m_ResyncState; // decompressed savestate awaiting load (client)
 };

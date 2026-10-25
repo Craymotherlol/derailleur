@@ -23,7 +23,7 @@ struct MpN64Config
   std::string state;
 
   /// Where a character-injected copy of the ROM is built, when the Waluigi/Daisy
-  /// option is on (see dr_settings::character_injection). Empty = never rebuilt.
+  /// option is on (see DrSettings::characterInjection). Empty = never rebuilt.
   std::string temp_rom;
 
   /// Where a boot_patches game snapshots itself once its first boot has settled,
@@ -47,7 +47,7 @@ struct MpN64Config
   dr_value_t rng;
   dr_value_t timer;
 
-  /// Reseed `rng` from dr_rand as each mini-game starts.
+  /// Reseed `rng` from DrRandom as each mini-game starts.
   bool seed_rng;
 
   dr_value_t controller[4];
@@ -141,7 +141,7 @@ protected:
   virtual void remapSlots(void) {}
 
   void run() override;
-  /// Reseeds the game's RNG from dr_rand, so a mini-game replayed from the same
+  /// Reseeds the game's RNG from DrRandom, so a mini-game replayed from the same
   /// savestate doesn't play out identically. No-op without a configured address.
   void seedRng();
   /// True if the hidden character is playable in `minigame` (see MpN64Config::hidden).

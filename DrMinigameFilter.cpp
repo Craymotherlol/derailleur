@@ -266,7 +266,7 @@ void DrMinigameFilter::onListSelected(int index)
   if (name.isEmpty() || !readList(name, disabled))
     return;
 
-  applyDisabled(disabled);
+  applyDisabled(disabled, true);
 
   QSettings settings(dr_filter_ini(), QSettings::IniFormat);
   settings.setValue(k_LastKey, name);
@@ -384,15 +384,81 @@ QSet<dr_minigame_key_t> DrMinigameFilter::disabledKeys(void) const
   for (; *it; ++it)
   {
     QTreeWidgetItem *item = *it;
+    dr_minigame_key_t key;
+    Qt::CheckState state;
 
-    if (item->data(0, k_RoleIsLeaf).toBool() && item->checkState(0) != Qt::Checked)
-      disabled.insert(item->data(0, k_RoleKey).toULongLong());
+    if (!item->data(0, k_RoleIsLeaf).toBool())
+      continue;
+    key = item->data(0, k_RoleKey).toULongLong();
+    state = m_forced.contains(dr_minigame_key_game(key))
+      ? m_forcedStates.value(key, Qt::Checked) : item->checkState(0);
+    if (state != Qt::Checked)
+      disabled.insert(key);
   }
 
   return disabled;
 }
 
-void DrMinigameFilter::applyDisabled(const QSet<dr_minigame_key_t> &disabled)
+QSet<dr_minigame_key_t> DrMinigameFilter::payloadKeys(void) const
+{
+  QSet<dr_minigame_key_t> disabled = disabledKeys();
+  QTreeWidgetItemIterator it(m_tree);
+
+  for (; *it; ++it)
+  {
+    QTreeWidgetItem *item = *it;
+    dr_minigame_key_t key;
+
+    if (!item->data(0, k_RoleIsLeaf).toBool())
+      continue;
+    key = item->data(0, k_RoleKey).toULongLong();
+    if (m_forced.contains(dr_minigame_key_game(key)))
+      disabled.insert(key);
+  }
+
+  return disabled;
+}
+
+void DrMinigameFilter::setForcedOff(const QSet<dr_guest> &guests)
+{
+  const QSet<dr_minigame_key_t> before = payloadKeys();
+  QTreeWidgetItemIterator it(m_tree);
+
+  m_applying = true;
+  for (; *it; ++it)
+  {
+    QTreeWidgetItem *item = *it;
+    dr_minigame_key_t key;
+    dr_guest game;
+    bool forced;
+
+    if (!item->data(0, k_RoleIsLeaf).toBool())
+      continue;
+    key = item->data(0, k_RoleKey).toULongLong();
+    game = dr_minigame_key_game(key);
+    forced = guests.contains(game);
+    if (forced == m_forced.contains(game))
+      continue;
+
+    if (forced)
+    {
+      m_forcedStates.insert(key, item->checkState(0));
+      item->setCheckState(0, Qt::Unchecked);
+    }
+    else
+      item->setCheckState(0, m_forcedStates.take(key));
+    if (item->parent())
+      item->parent()->setDisabled(forced);
+  }
+  m_forced = guests;
+  m_applying = false;
+  updateCounts();
+
+  if (payloadKeys() != before)
+    emit filterChanged(payload());
+}
+
+void DrMinigameFilter::applyDisabled(const QSet<dr_minigame_key_t> &disabled, bool forced_too)
 {
   QTreeWidgetItemIterator it(m_tree);
 
@@ -406,7 +472,13 @@ void DrMinigameFilter::applyDisabled(const QSet<dr_minigame_key_t> &disabled)
     if (!item->data(0, k_RoleIsLeaf).toBool())
       continue;
     key = item->data(0, k_RoleKey).toULongLong();
-    item->setCheckState(0, disabled.contains(key) ? Qt::Unchecked : Qt::Checked);
+    if (m_forced.contains(dr_minigame_key_game(key)))
+    {
+      if (forced_too)
+        m_forcedStates.insert(key, disabled.contains(key) ? Qt::Unchecked : Qt::Checked);
+    }
+    else
+      item->setCheckState(0, disabled.contains(key) ? Qt::Unchecked : Qt::Checked);
     m_hidden.remove(key);
   }
   m_applying = false;
@@ -415,12 +487,12 @@ void DrMinigameFilter::applyDisabled(const QSet<dr_minigame_key_t> &disabled)
 
 QByteArray DrMinigameFilter::payload() const
 {
-  return dr_minigame_filter_encode(disabledKeys());
+  return dr_minigame_filter_encode(payloadKeys());
 }
 
 void DrMinigameFilter::setFromPayload(const QByteArray &payload)
 {
-  applyDisabled(dr_minigame_filter_decode(payload));
+  applyDisabled(dr_minigame_filter_decode(payload), false);
 }
 
 void DrMinigameFilter::onItemChanged(QTreeWidgetItem *item, int column)

@@ -4,6 +4,7 @@
 #include <QWidget>
 
 class QListWidget;
+class QListWidgetItem;
 class QStackedWidget;
 
 /**
@@ -23,6 +24,9 @@ public:
   /// page added becomes the current selection.
   void addTool(const QString &name, QWidget *page);
 
+  /// Greys out (or restores) the sidebar row and page for `page`.
+  void setToolEnabled(QWidget *page, bool enabled);
+
   /// Adds a non-selectable section header to the sidebar.
   void addDivider(const QString &text);
 
@@ -36,6 +40,9 @@ public:
   void revealTools(const QString &selectName);
 
 private:
+  /// The sidebar row showing `page`, or null.
+  QListWidgetItem *toolRow(QWidget *page) const;
+
   QListWidget *m_Sidebar = nullptr;
   QStackedWidget *m_Stack = nullptr;
   bool m_DeferReveal = false;

@@ -1,4 +1,6 @@
 #include "MarioParty5.h"
+#include "DrRandom.h"
+#include "DrPaths.h"
 
 #include <cstring>
 
@@ -171,7 +173,7 @@ static MpGcnConfig buildConfig()
 {
   MpGcnConfig config = {};
 
-  config.game = (dr_roms_directory() + "/Mario Party 5 (USA)").toStdString();
+  config.game = (DrPaths::instance().romsDirectory() + "/Mario Party 5 (USA)").toStdString();
   config.state = "mp5";
 
   config.scene_miniexplain = 0x07;
@@ -232,7 +234,7 @@ void MarioParty5::rollStarSpirit()
   {
     if (!m_starSpirit)
     {
-      m_starSpirit = MP5_STAR_SPIRIT_FIRST + dr_rand() % MP5_STAR_SPIRIT_COUNT;
+      m_starSpirit = MP5_STAR_SPIRIT_FIRST + DrRandom::instance().next() % MP5_STAR_SPIRIT_COUNT;
       log(DR_LOG_INFO,
         qPrintable(QString("star spirit model: 0x%1").arg(m_starSpirit, 8, 16, QChar('0'))));
     }

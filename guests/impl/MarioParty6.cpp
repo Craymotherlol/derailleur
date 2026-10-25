@@ -1,4 +1,6 @@
 #include "MarioParty6.h"
+#include "DrRandom.h"
+#include "DrPaths.h"
 
 #include <cstring>
 
@@ -179,7 +181,7 @@ static MpGcnConfig buildConfig()
 {
   MpGcnConfig config = {};
 
-  config.game = (dr_roms_directory() + "/Mario Party 6 (USA)").toStdString();
+  config.game = (DrPaths::instance().romsDirectory() + "/Mario Party 6 (USA)").toStdString();
   config.state = "mp6";
 
   config.scene_miniexplain = 0x04;
@@ -240,10 +242,10 @@ void MarioParty6::doApplyGameData(const DrGameData &data)
 
   m_retro->writeValue(MP6_MIC_CONTROLLER, MP6_MIC_OPTION);
 
-  /* dr_rand is shared and lockstepped, so every netplay peer plays the same one.
+  /* DrRandom is shared and lockstepped, so every netplay peer plays the same one.
    * The setup writes it back over the next couple of seconds, so it is held
    * rather than written once. */
-  m_night = (dr_rand() % 2) != 0;
+  m_night = (DrRandom::instance().next() % 2) != 0;
   m_dayNightFrames = MP6_DAYNIGHT_FRAMES;
   log(DR_LOG_INFO, qPrintable(QString("time of day: %1").arg(m_night ? "night" : "day")));
 }

@@ -1,4 +1,5 @@
 #include "MarioParty2.h"
+#include "DrPaths.h"
 
 #include <cstring>
 
@@ -165,9 +166,9 @@ static MpN64Config buildConfig()
   MpN64Config config = {};
 
   config.rom = "Mario Party 2 (USA).z64";
-  config.state = (dr_state_directory() + "/mp2.state.zip").toStdString();
-  config.temp_state = (dr_state_directory() + "/mp2-temp.state.zip").toStdString();
-  config.temp_rom = (dr_roms_directory() + "/mp2-temp.z64").toStdString();
+  config.state = (DrPaths::instance().stateDirectory() + "/mp2.state.zip").toStdString();
+  config.temp_state = (DrPaths::instance().stateDirectory() + "/mp2-temp.state.zip").toStdString();
+  config.temp_rom = (DrPaths::instance().romsDirectory() + "/mp2-temp.z64").toStdString();
 
   config.scene_miniexplain[0] = 0x5F;
   config.scene_miniexplain[1] = 0x60;

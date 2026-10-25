@@ -1,4 +1,5 @@
 #include "MarioParty1Host.h"
+#include "DrPaths.h"
 
 #include <cstring>
 
@@ -176,8 +177,8 @@ static DrHostConfig makeConfig(const std::string &game)
 {
   DrHostConfig config = {};
 
-  config.core = dr_core_path(DR_CORE_MUPEN64PLUSNEXT).toStdString();
-  config.game = (dr_roms_directory() + "/Mario Party (USA).z64").toStdString();
+  config.core = DrPaths::instance().corePath(DR_CORE_MUPEN64PLUSNEXT).toStdString();
+  config.game = (DrPaths::instance().romsDirectory() + "/Mario Party (USA).z64").toStdString();
   if (!game.empty())
     config.game = game;
 

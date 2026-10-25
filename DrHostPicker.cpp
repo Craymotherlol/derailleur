@@ -1,4 +1,5 @@
 #include "DrHostPicker.h"
+#include "DrPaths.h"
 #include "DrStartup.h"
 #include "hosts/DrHosts.h"
 
@@ -22,8 +23,8 @@ static QStringList dr_missing_files(const QString &rom, dr_core core)
 
   if (!QFile::exists(rom))
     missing.append(QDir::toNativeSeparators(rom));
-  if (core != DR_CORE_INVALID && !QFile::exists(dr_core_path(core)))
-    missing.append(QDir::toNativeSeparators(dr_core_path(core)));
+  if (core != DR_CORE_INVALID && !QFile::exists(DrPaths::instance().corePath(core)))
+    missing.append(QDir::toNativeSeparators(DrPaths::instance().corePath(core)));
 
   return missing;
 }

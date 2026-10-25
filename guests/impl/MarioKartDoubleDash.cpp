@@ -1,4 +1,5 @@
 #include "MarioKartDoubleDash.h"
+#include "DrPaths.h"
 
 static const dr_value_t MKDD_CUP = { 0x803CB7A8, DR_VALUE_TYPE_S32 };
 static const dr_value_t MKDD_TRACK = { 0x803CB7AC, DR_VALUE_TYPE_S32 };
@@ -304,7 +305,7 @@ enum
 };
 
 MarioKartDoubleDash::MarioKartDoubleDash(QObject *parent)
-  : DrGuestGcn("gcn-mkdd", (dr_roms_directory() + "/Mario Kart - Double Dash!! (USA)").toStdString(), parent)
+  : DrGuestGcn("gcn-mkdd", (DrPaths::instance().romsDirectory() + "/Mario Kart - Double Dash!! (USA)").toStdString(), parent)
 {
 }
 

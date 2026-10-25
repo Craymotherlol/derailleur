@@ -1,4 +1,7 @@
 #include "MarioParty9.h"
+#include "DrNetplay.h"
+#include "DrRandom.h"
+#include "DrPaths.h"
 
 #include <QRetro.h>
 
@@ -265,7 +268,7 @@ static const dr_mp_minigame_t MP9_MINIGAMES[] =
 };
 
 MarioParty9::MarioParty9(QObject *parent)
-  : DrGuestWii("wii-mp9", (dr_roms_directory() + "/Mario Party 9 (USA, Asia) (En,Fr,Es)").toStdString(), parent)
+  : DrGuestWii("wii-mp9", (DrPaths::instance().romsDirectory() + "/Mario Party 9 (USA, Asia) (En,Fr,Es)").toStdString(), parent)
 {
 }
 
@@ -349,13 +352,13 @@ void MarioParty9::run()
     {
       applyControlRemap(m_minigame->quirks, m_players);
       m_controlsApplied = true;
-      if (dr_netplay_active())
+      if (DrNetplay::sessionActive())
         m_resyncCountdown = 120;
     }
   }
 
   /* Resync peers */
-  if (m_resyncCountdown > 0 && --m_resyncCountdown == 0 && dr_netplay_is_server())
+  if (m_resyncCountdown > 0 && --m_resyncCountdown == 0 && DrNetplay::sessionServer())
     emit hardResync();
 
   if (!m_finishScheduled)
@@ -391,7 +394,7 @@ void MarioParty9::doApplyGameData(const DrGameData &data)
   m_retro->writeValue(data.minigame->minigame_id, MP9_MINIGAME_TO_LOAD);
 
   /* Re-seed RNG as it does not update every frame */
-  const uint32_t seed = static_cast<uint32_t>(dr_rand());
+  const uint32_t seed = static_cast<uint32_t>(DrRandom::instance().next());
   m_retro->writeValue(seed, MP9_RNG);
   log(DR_LOG_INFO, qPrintable(QString("RNG seed: 0x%1").arg(seed, 8, 16, QChar('0'))));
 

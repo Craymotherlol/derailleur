@@ -1,4 +1,5 @@
 #include "mainwindow.h"
+#include "DrRandom.h"
 
 #include <array>
 #include <cstdlib>
@@ -17,7 +18,7 @@
 #include <windows.h>
 #endif
 
-#include "DrSettings.h"
+#include "DrSettingsPage.h"
 #include "DrStartup.h"
 #include "guests/DrGuests.h"
 #include "hosts/DrHosts.h"
@@ -108,7 +109,7 @@ MainWindow::MainWindow(QWidget *parent)
   m_Tools->addTool(tr("Start Game"), m_Picker);
   connect(m_Picker, &DrHostPicker::hostChosen, this, &MainWindow::startHost);
 
-  dr_srand(QRandomGenerator::global()->generate());
+  DrRandom::instance().seed(QRandomGenerator::global()->generate());
 
   m_InputStore = new DrInputStore();
   m_Netplay = new DrNetplay(m_InputStore, this);
@@ -120,9 +121,9 @@ MainWindow::MainWindow(QWidget *parent)
   setupStack();
   setupFullscreen();
   m_Overlay = new DrOverlay(this);
-  setupDebug();
   setupChallenge();
   setupSettings();
+  setupDebug();
 
   m_Tools->revealTools(tr("Start Game"));
 
@@ -211,6 +212,14 @@ void MainWindow::setupGuests()
   }
   m_Guests->logSummary();
 
+  {
+    QSet<int> owned;
+
+    for (DrGuest *guest : m_Guests->guests())
+      owned.insert(guest->id());
+    m_Netplay->setOwnedGuests(owned);
+  }
+
   connect(m_Guests, &DrGuestList::minigameFinished, this, &MainWindow::onMinigameFinished,
     Qt::QueuedConnection);
 }
@@ -226,6 +235,29 @@ void MainWindow::setupFilter()
   connect(m_Netplay, &DrNetplay::minigameFilterReceived, this, [this](QByteArray payload) {
     m_Guests->applyFilter(payload);
     m_Filter->setFromPayload(payload);
+  });
+
+  connect(m_Netplay, &DrNetplay::missingGuestsChanged, this, [this](QSet<int> guests) {
+    QSet<dr_guest> forced;
+
+    for (int guest : guests)
+      forced.insert(static_cast<dr_guest>(guest));
+    m_Filter->setForcedOff(forced);
+  });
+  connect(m_Netplay, &DrNetplay::hostGuestsReceived, this, [this](QSet<int> guests) {
+    QSet<dr_guest> excluded;
+
+    for (DrGuest *guest : m_Guests->guests())
+      if (!guests.contains(guest->id()))
+        excluded.insert(guest->id());
+    m_Guests->setExcludedGuests(excluded);
+  });
+  connect(m_Netplay, &DrNetplay::lobbyJoined, this,
+    [this]() { m_Tools->setToolEnabled(m_Filter, false); });
+  connect(m_Netplay, &DrNetplay::sessionError, this, [this]() {
+    m_Tools->setToolEnabled(m_Filter, true);
+    m_Guests->setExcludedGuests(QSet<dr_guest>());
+    m_Filter->setForcedOff(QSet<dr_guest>());
   });
 
   m_Filter->restoreLastList();
@@ -293,11 +325,23 @@ void MainWindow::setupChallenge()
 
 void MainWindow::setupSettings()
 {
-  DrSettings *settings = new DrSettings();
+  DrSettingsPage *settings = new DrSettingsPage();
+
+  m_Settings = settings;
 
   m_Tools->addTool(tr("Settings"), settings);
-  connect(settings, &DrSettings::redownloadSavesRequested, this,
+  connect(settings, &DrSettingsPage::redownloadSavesRequested, this,
     [this]() { dr_redownload_saves(m_Logger); });
+  connect(settings, &DrSettingsPage::settingChanged, m_Netplay, [this](dr_setting_id id) {
+    if (DrSettings::table[id].host_inherited)
+      m_Netplay->broadcastSettings();
+  });
+  connect(m_Netplay, &DrNetplay::hostSettingsReceived, settings,
+    [settings]() { settings->setNetplayClient(true); });
+  connect(m_Netplay, &DrNetplay::sessionError, settings, [settings]() {
+    DrSettings::instance().clearHost();
+    settings->setNetplayClient(false);
+  });
 }
 
 void MainWindow::setupNetplay()
@@ -308,6 +352,8 @@ void MainWindow::setupNetplay()
 
   connect(m_Netplay, &DrNetplay::sessionStarted, this, [this](int index, int count) {
     m_Logger->message(DR_LOG_INFO, QString("netplay started: peer %1 of %2").arg(index).arg(count));
+    m_Tools->setToolEnabled(m_Filter, false);
+    m_Tools->setToolEnabled(m_Challenge, false);
     m_NetplayPeerIndex = index;
     if (m_Host)
       m_Host->setLocalPlayer(index);
@@ -318,6 +364,8 @@ void MainWindow::setupNetplay()
   });
 
   connect(m_Netplay, &DrNetplay::sessionError, this, [this](const QString &reason) {
+    m_Tools->setToolEnabled(m_Filter, true);
+    m_Tools->setToolEnabled(m_Challenge, true);
     m_Logger->message(DR_LOG_ERROR, reason);
     QMessageBox::warning(this, tr("Netplay"), reason);
   });
@@ -377,6 +425,7 @@ void MainWindow::startWithHost(DrHost *host)
   raise();
   activateWindow();
   m_Picker->setEnabled(false);
+  m_Settings->setGameRunning(true);
   m_Host->setLocalPlayer(m_NetplayPeerIndex);
 
   if (DrOverlay *ov = overlay())
@@ -463,7 +512,7 @@ void MainWindow::launchMinigame(
     DrGameData data;
 
     m_Stack->setCurrentWidget(m_Guests);
-    if (dr_settings_get().mute_while_loading)
+    if (DrSettings::instance().muteWhileLoading())
       if (auto *a = guest->core()->audio())
         a->setMute(true);
 
@@ -535,7 +584,7 @@ void MainWindow::showHost()
      * held; every peer does it at this point, and the barrier below absorbs any
      * difference in how long it takes. The overlay shows a frame grabbed from the
      * guest already (holdView), and its QRetro window survives the unload. */
-    m_Guests->unloadIdleGuests(dr_settings_get().resident_guests);
+    m_Guests->unloadIdleGuests(DrSettings::instance().residentGuests());
     m_Netplay->setActiveContext(m_Host->core());
     m_Host->unpause();
     m_Stack->setCurrentWidget(m_HostContainer);

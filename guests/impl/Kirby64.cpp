@@ -1,4 +1,5 @@
 #include "Kirby64.h"
+#include "DrRandom.h"
 
 #include <QDir>
 #include <QFile>
@@ -279,10 +280,10 @@ void Kirby64::doApplyGameData(const DrGameData &data)
 
   m_retro->loadState(state());
 
-  /* Seed the game's RNG from the shared dr_rand sequence so peers match */
-  const uint32_t seed = (static_cast<uint32_t>(dr_rand() & 0xFFFF) << 16) |
-    static_cast<uint32_t>(dr_rand() & 0xFFFF);
-  const uint16_t count = static_cast<uint16_t>(dr_rand());
+  /* Seed the game's RNG from the shared DrRandom sequence so peers match */
+  const uint32_t seed = (static_cast<uint32_t>(DrRandom::instance().next() & 0xFFFF) << 16) |
+    static_cast<uint32_t>(DrRandom::instance().next() & 0xFFFF);
+  const uint16_t count = static_cast<uint16_t>(DrRandom::instance().next());
   m_retro->writeValue(seed, K64_RNG_SEED);
   m_retro->writeValue(count, K64_RNG_COUNT);
   log(DR_LOG_INFO, qPrintable(QString("RNG seed: 0x%1, count: %2")
@@ -360,7 +361,7 @@ void Kirby64::doApplyGameData(const DrGameData &data)
   else
   {
     /* No CPUs: the game takes the stage from its own selection, so randomize it */
-    const uint32_t stage = static_cast<uint32_t>(dr_rand() % 4);
+    const uint32_t stage = static_cast<uint32_t>(DrRandom::instance().next() % 4);
     m_retro->writeValueForFrames(stage, K64_HUMAN_STAGE, 120);
     log(DR_LOG_INFO, qPrintable(QString("stage (random, no CPUs): %1").arg(stage)));
   }

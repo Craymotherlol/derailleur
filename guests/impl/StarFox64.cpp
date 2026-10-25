@@ -1,4 +1,5 @@
 #include "StarFox64.h"
+#include "DrRandom.h"
 
 #include <QDir>
 #include <QFile>
@@ -594,7 +595,7 @@ void StarFox64::doApplyGameData(const DrGameData &data)
   {
     const int form = m_minigame->scene_id;
     const int stages = form == SF64_PLAYER_FORM_LANDMASTER ? 2 : 3;
-    const int stage = dr_rand() % stages;
+    const int stage = DrRandom::instance().next() % stages;
 
     m_retro->writeValue(m_minigame->minigame_id, SF64_VS_MATCH_TYPE);
     if (m_minigame->minigame_id == SF64_VS_MATCH_TIME_TRIAL)

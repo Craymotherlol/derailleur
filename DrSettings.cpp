@@ -1,146 +1,127 @@
 #include "DrSettings.h"
 
-#include "DrCommon.h"
-#include "DrRetro.h"
+#include <QDataStream>
+#include <QDir>
+#include <QSettings>
 
-#include <QCheckBox>
-#include <QComboBox>
-#include <QFormLayout>
-#include <QGroupBox>
-#include <QLabel>
-#include <QPushButton>
-#include <QVBoxLayout>
+const dr_setting_t DrSettings::table[DR_SETTING_SIZE] = {
+  { "loading_overlay", DR_SETTING_TYPE_BOOL, 1, false, false },
+  { "mute_while_loading", DR_SETTING_TYPE_BOOL, 1, false, false },
+  { "character_injection", DR_SETTING_TYPE_BOOL, 0, true, true },
+  { "res_scale_n64", DR_SETTING_TYPE_UNSIGNED, 2, false, false },
+  { "res_scale_gcn", DR_SETTING_TYPE_UNSIGNED, 1, false, false },
+  { "res_scale_ds", DR_SETTING_TYPE_UNSIGNED, 2, false, false },
+  { "widescreen_hack", DR_SETTING_TYPE_BOOL, 0, false, false },
+  { "resident_guests", DR_SETTING_TYPE_UNSIGNED, 0, true, false },
+};
 
-/* Builds a checkbox bound to one bool in dr_settings: reads the current value,
- * and on toggle writes `member` back through and persists. */
-static QCheckBox *settings_checkbox(QWidget *parent, const QString &text,
-  const QString &tooltip, bool dr_settings::*member)
+static QString settings_ini_path(void)
 {
-  QCheckBox *box = new QCheckBox(text, parent);
-
-  box->setChecked(dr_settings_get().*member);
-  box->setToolTip(tooltip);
-  QObject::connect(box, &QCheckBox::toggled, box, [member](bool on) {
-    dr_settings_get().*member = on;
-    dr_settings_save();
-  });
-
-  return box;
+  return QDir::current().filePath("derailleur.ini");
 }
 
-/* Builds a resolution dropdown bound to one unsigned in dr_settings: entry N is
- * labelled for N times `native_height`, and writes through on change. */
-static QComboBox *settings_scale_combo(QWidget *parent, unsigned native_height,
-  unsigned max_scale, unsigned recommended, unsigned dr_settings::*member)
+static QString settings_key(const dr_setting_t *setting)
 {
-  QComboBox *combo = new QComboBox(parent);
-  const unsigned current = dr_settings_get().*member;
+  return QString("settings/") + setting->name;
+}
 
-  for (unsigned n = 1; n <= max_scale; n++)
+DrSettings &DrSettings::instance(void)
+{
+  static DrSettings settings;
+
+  return settings;
+}
+
+DrSettings::DrSettings(void)
+{
+  unsigned i;
+
+  for (i = 0; i < DR_SETTING_SIZE; i++)
+    m_values[i] = m_ownValues[i] = table[i].default_value;
+}
+
+void DrSettings::setValue(dr_setting_id id, unsigned value)
+{
+  m_values[id] = (table[id].type == DR_SETTING_TYPE_BOOL) ? (value != 0) : value;
+}
+
+void DrSettings::load(void)
+{
+  QSettings s(settings_ini_path(), QSettings::IniFormat);
+  unsigned i;
+
+  for (i = 0; i < DR_SETTING_SIZE; i++)
   {
-    QString label = QObject::tr("%1x for %2p").arg(n).arg(n * native_height);
+    const QVariant value = s.value(settings_key(&table[i]), m_values[i]);
 
-    if (n == recommended)
-      label += QObject::tr(" (recommended)");
-    combo->addItem(label, n);
+    setValue(static_cast<dr_setting_id>(i),
+      table[i].type == DR_SETTING_TYPE_BOOL ? value.toBool() : value.toUInt());
   }
-
-  /* A value from a newer build, or a hand-edited ini, would not be in the list. */
-  combo->setCurrentIndex(
-    (current >= 1 && current <= max_scale) ? static_cast<int>(current) - 1
-                                           : static_cast<int>(recommended) - 1);
-  QObject::connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged), combo,
-    [member, combo](int index) {
-      dr_settings_get().*member = combo->itemData(index).toUInt();
-      dr_settings_save();
-    });
-
-  return combo;
 }
 
-/* A muted, wrapped caption under the control it explains. */
-static QLabel *settings_note(QWidget *parent, const QString &text)
+void DrSettings::save(void) const
 {
-  QLabel *note = new QLabel(text, parent);
+  QSettings s(settings_ini_path(), QSettings::IniFormat);
+  unsigned i;
 
-  note->setWordWrap(true);
-  note->setEnabled(false); /* muted */
+  for (i = 0; i < DR_SETTING_SIZE; i++)
+  {
+    const unsigned value = (m_fromHost && table[i].host_inherited) ? m_ownValues[i] : m_values[i];
 
-  return note;
+    if (table[i].type == DR_SETTING_TYPE_BOOL)
+      s.setValue(settings_key(&table[i]), value != 0);
+    else
+      s.setValue(settings_key(&table[i]), value);
+  }
+  s.sync();
 }
 
-DrSettings::DrSettings(QWidget *parent)
-  : QWidget(parent)
+QByteArray DrSettings::encodeInherited(void) const
 {
-  QVBoxLayout *layout = new QVBoxLayout(this);
+  QByteArray payload;
+  QDataStream s(&payload, QIODevice::WriteOnly);
+  unsigned i;
 
-  QGroupBox *graphics = new QGroupBox(tr("Graphics"), this);
-  QVBoxLayout *graphicsLayout = new QVBoxLayout(graphics);
+  s.setByteOrder(QDataStream::LittleEndian);
+  for (i = 0; i < DR_SETTING_SIZE; i++)
+    if (table[i].host_inherited)
+      s << static_cast<quint8>(i) << static_cast<quint32>(m_values[i]);
 
-  QCheckBox *widescreen = settings_checkbox(graphics, tr("Widescreen hack"),
-    tr("Render every game at 16:9 instead of the 4:3 they were made for.\n"
-       "Stretches some HUDs and lets objects pop in at the edges of the screen."),
-    &dr_settings::widescreen_hack);
+  return payload;
+}
 
-  connect(widescreen, &QCheckBox::toggled, this, []() { dr_reapply_global_core_options(); });
-  graphicsLayout->addWidget(widescreen);
-  graphicsLayout->addWidget(settings_note(graphics,
-    tr("Play Nintendo 64 and GameCube games in simulated widescreen.")));
+void DrSettings::applyHost(const QByteArray &payload)
+{
+  QDataStream s(payload);
+  unsigned i;
 
-  /* Native heights: N64 240p, GameCube/Wii 480p, DS 192p per screen. */
-  QGroupBox *resolution = new QGroupBox(tr("Internal resolution"), graphics);
-  QVBoxLayout *resolutionLayout = new QVBoxLayout(resolution);
-  QFormLayout *resolutions = new QFormLayout();
+  s.setByteOrder(QDataStream::LittleEndian);
+  if (!m_fromHost)
+    for (i = 0; i < DR_SETTING_SIZE; i++)
+      m_ownValues[i] = m_values[i];
+  m_fromHost = true;
 
-  QComboBox *scales[] = {
-    settings_scale_combo(resolution, 240, 8, 2, &dr_settings::res_scale_n64),
-    settings_scale_combo(resolution, 480, 6, 1, &dr_settings::res_scale_gcn),
-    settings_scale_combo(resolution, 192, 8, 2, &dr_settings::res_scale_ds),
-  };
+  while (!s.atEnd())
+  {
+    quint8 id = 0;
+    quint32 value = 0;
 
-  for (QComboBox *scale : scales)
-    connect(scale, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-      []() { dr_reapply_global_core_options(); });
-  resolutions->addRow(tr("Nintendo 64"), scales[0]);
-  resolutions->addRow(tr("GameCube / Wii"), scales[1]);
-  resolutions->addRow(tr("Nintendo DS"), scales[2]);
-  resolutionLayout->addLayout(resolutions);
-  resolutionLayout->addWidget(settings_note(resolution,
-    tr("Higher costs GPU time, and a few mini-games "
-       "force their own resolution to render correctly.")));
-  graphicsLayout->addWidget(resolution);
-  layout->addWidget(graphics);
+    s >> id >> value;
+    if (s.status() != QDataStream::Ok)
+      break;
+    if (id < DR_SETTING_SIZE && table[id].host_inherited)
+      setValue(static_cast<dr_setting_id>(id), value);
+  }
+}
 
-  QGroupBox *game = new QGroupBox(tr("Game"), this);
-  QVBoxLayout *gameLayout = new QVBoxLayout(game);
+void DrSettings::clearHost(void)
+{
+  unsigned i;
 
-  gameLayout->addWidget(settings_checkbox(game, tr("BETA: Waluigi and Daisy in Mario Party 1 and 2"),
-    tr("Play as injected characters in Mario Party and Mario Party 2 Mini-Games. Expect issues!"),
-    &dr_settings::character_injection));
-  gameLayout->addWidget(settings_note(
-    game, tr("Play as injected characters in Mario Party and Mario Party 2 Mini-Games. Expect issues!")));
-  layout->addWidget(game);
-
-  QGroupBox *debug = new QGroupBox(tr("Debug"), this);
-  QVBoxLayout *debugLayout = new QVBoxLayout(debug);
-
-  debugLayout->addWidget(settings_checkbox(debug, tr("Show the loading overlay"),
-    tr("Cover the switch between games with the last frame and a loading icon.\n"
-       "Turn this off to see the cores swapping underneath."),
-    &dr_settings::loading_overlay));
-  debugLayout->addWidget(settings_checkbox(debug, tr("Mute game while loading"),
-    tr("Silence a mini-game's core until the mini-game itself starts.\n"
-       "Turn this off to hear it boot underneath the loading overlay."),
-    &dr_settings::mute_while_loading));
-  layout->addWidget(debug);
-
-  QPushButton *redownloadSaves = new QPushButton(tr("Re-download saves"), this);
-  redownloadSaves->setToolTip(
-    tr("Fetch the latest save files from the server, overwriting your local ones.\n"
-       "Saves are otherwise downloaded only on the first launch."));
-  connect(redownloadSaves, &QPushButton::clicked, this,
-    [this]() { emit redownloadSavesRequested(); });
-  layout->addWidget(redownloadSaves);
-
-  layout->addStretch();
+  if (!m_fromHost)
+    return;
+  for (i = 0; i < DR_SETTING_SIZE; i++)
+    if (table[i].host_inherited)
+      m_values[i] = m_ownValues[i];
+  m_fromHost = false;
 }

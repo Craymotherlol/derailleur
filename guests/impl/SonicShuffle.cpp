@@ -1,4 +1,5 @@
 #include "SonicShuffle.h"
+#include "DrRandom.h"
 
 #include <cstddef>
 
@@ -175,7 +176,7 @@ static uint8_t ss_arrangement_value(const uint8_t order[4])
     if ((SS_ARRANGEMENTS[v][0] == order[0] && SS_ARRANGEMENTS[v][2] == order[2]) ||
         (SS_ARRANGEMENTS[v][0] == order[2] && SS_ARRANGEMENTS[v][2] == order[0]))
       return (uint8_t)v;
-  return (uint8_t)(dr_rand() % 12);
+  return (uint8_t)(DrRandom::instance().next() % 12);
 }
 
 /* Fields: name, host type, id (SS_MINIGAME_ID), supertype (SS_MINIGAME_SUPERTYPE),
@@ -386,7 +387,7 @@ void SonicShuffle::doApplyGameData(const DrGameData &data)
           members[count++] = slot;
       if (count == 2)
       {
-        zero = dr_rand() % 2;
+        zero = DrRandom::instance().next() % 2;
         role_of[members[zero]] = 0;
         role_of[members[!zero]] = 1;
       }
@@ -429,12 +430,12 @@ void SonicShuffle::doApplyGameData(const DrGameData &data)
               order[pos++] = (uint8_t)sl;
               break;
             }
-      arrangement = (pos == 4) ? ss_arrangement_value(order) : (uint8_t)(dr_rand() % 12);
+      arrangement = (pos == 4) ? ss_arrangement_value(order) : (uint8_t)(DrRandom::instance().next() % 12);
     }
     else if (type == DR_MINIGAME_1V3)
       arrangement = solo;
     else
-      arrangement = (uint8_t)(dr_rand() % 12);
+      arrangement = (uint8_t)(DrRandom::instance().next() % 12);
 
     m_retro->writeValueForFrames(arrangement, SS_MINIGAME_ARRANGEMENT, 120);
   }

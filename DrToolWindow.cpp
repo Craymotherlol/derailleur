@@ -57,6 +57,39 @@ void DrToolWindow::addTool(const QString &name, QWidget *page)
     m_Sidebar->setCurrentItem(item);
 }
 
+QListWidgetItem *DrToolWindow::toolRow(QWidget *page) const
+{
+  const int index = m_Stack->indexOf(page);
+  int i;
+
+  if (index < 0)
+    return nullptr;
+
+  for (i = 0; i < m_Sidebar->count(); i++)
+  {
+    const QVariant v = m_Sidebar->item(i)->data(Qt::UserRole);
+
+    if (v.isValid() && v.toInt() == index)
+      return m_Sidebar->item(i);
+  }
+
+  return nullptr;
+}
+
+void DrToolWindow::setToolEnabled(QWidget *page, bool enabled)
+{
+  QListWidgetItem *row = toolRow(page);
+
+  if (!row)
+    return;
+
+  if (enabled)
+    row->setFlags(row->flags() | Qt::ItemIsEnabled);
+  else
+    row->setFlags(row->flags() & ~Qt::ItemIsEnabled);
+  page->setEnabled(enabled);
+}
+
 void DrToolWindow::addDivider(const QString &text)
 {
   auto *item = new QListWidgetItem(text);

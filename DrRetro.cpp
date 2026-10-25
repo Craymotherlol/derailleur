@@ -1,4 +1,6 @@
 #include "DrRetro.h"
+#include "DrPaths.h"
+#include "DrSettings.h"
 
 #include <QFile>
 #include <QList>
@@ -68,7 +70,7 @@ void dr_reapply_global_core_options(void)
 
 void dr_apply_global_core_options(QRetro *core, dr_core which)
 {
-  const bool widescreen = dr_settings_get().widescreen_hack;
+  const bool widescreen = DrSettings::instance().widescreenHack();
   const bool widens = (which == DR_CORE_DOLPHIN || which == DR_CORE_MUPEN64PLUSNEXT);
   const dr_core_option_t options[] = {
     { "mupen64plus-aspect", widescreen ? "16:9 adjusted" : "4:3" },
@@ -96,21 +98,21 @@ void dr_apply_global_core_options(QRetro *core, dr_core which)
   {
   case DR_CORE_MUPEN64PLUSNEXT:
   {
-    const QByteArray scale = QByteArray::number(dr_settings_get().res_scale_n64);
+    const QByteArray scale = QByteArray::number(DrSettings::instance().resScaleN64());
 
     core->options()->setOptionValue("mupen64plus-EnableNativeResFactor", scale.constData());
     break;
   }
   case DR_CORE_DOLPHIN:
   {
-    const QByteArray scale = QByteArray::number(dr_settings_get().res_scale_gcn);
+    const QByteArray scale = QByteArray::number(DrSettings::instance().resScaleGcn());
 
     core->options()->setOptionValue("dolphin_efb_scale", scale.constData());
     break;
   }
   case DR_CORE_MELONDSDS:
   {
-    const unsigned n = dr_settings_get().res_scale_ds;
+    const unsigned n = DrSettings::instance().resScaleDs();
     const QByteArray value = QString("%1x native (%2 x %3)")
                                .arg(n).arg(n * 256).arg(n * 192).toUtf8();
 
@@ -224,7 +226,7 @@ void DrRetro::init(dr_core core, const QString &rom, bool saving)
 {
   QRetro *c = new QRetro();
 
-  setPaths(dr_core_path(core), rom);
+  setPaths(DrPaths::instance().corePath(core), rom);
   c->setSavingEnabled(saving);
   dr_apply_global_core_options(c, core);
   setCore(c);
@@ -238,7 +240,7 @@ void DrRetro::init(const QString &core, const QString &rom, bool saving)
   if (core.contains('/') || core.contains('\\'))
     setPaths(core, rom);
   else
-    setPaths(dr_cores_directory() + "/" + core + dr_os_extension(), rom);
+    setPaths(DrPaths::instance().coresDirectory() + "/" + core + dr_os_extension(), rom);
   c->setSavingEnabled(saving);
   setCore(c);
 }
@@ -246,7 +248,7 @@ void DrRetro::init(const QString &core, const QString &rom, bool saving)
 void DrRetro::setPaths(const QString &corePath, const QString &rom)
 {
   m_corePath = corePath.toStdString();
-  m_gamePath = (dr_roms_directory() + "/" + rom).toStdString();
+  m_gamePath = (DrPaths::instance().romsDirectory() + "/" + rom).toStdString();
 
   /* Content loads lazily on the first launch (see DrGuest::applyGameData); just
    * confirm the ROM is present so a missing one drops the guest at startup. */
@@ -298,7 +300,7 @@ bool DrRetro::boot(unsigned frames, std::function<void()> onBooted)
       /* Mute through the boot window. On the first boot mainwindow's mute ran
        * before the core existed (audio() was still null), so re-assert it here
        * each frame; the minigameStarted handler unmutes once the game starts. */
-      if (dr_settings_get().mute_while_loading)
+      if (DrSettings::instance().muteWhileLoading())
         if (auto *a = m_core->audio())
           a->setMute(true);
       if (--m_bootCountdown != 0)
@@ -335,7 +337,7 @@ bool DrRetro::loadState(const char *name)
 {
   if (!m_core)
     return false;
-  const QString path = dr_state_directory() + "/" + name + ".state.zip";
+  const QString path = DrPaths::instance().stateDirectory() + "/" + name + ".state.zip";
   const bool ok = m_core->unserializeFromFile(path);
   log(ok ? DR_LOG_INFO : DR_LOG_WARN,
     qPrintable(QString("load state %1: %2").arg(path, ok ? "ok" : "failed")));
@@ -349,7 +351,7 @@ void DrRetro::applyQuirks(const dr_mp_minigame_t *minigame)
 
   const char *option_value = nullptr;
   /* Held for as long as option_value may point into it. */
-  const QByteArray efb_scale = QByteArray::number(dr_settings_get().res_scale_gcn);
+  const QByteArray efb_scale = QByteArray::number(DrSettings::instance().resScaleGcn());
 
   /// Graphics > Settings > Texture Cache Accuracy
   /// 128=Normal, 512=Fast, 0=Safe
@@ -375,7 +377,7 @@ void DrRetro::applyQuirks(const dr_mp_minigame_t *minigame)
 
   /// Graphics > Settings > Internal Resolution
   /// A quirked mini-game only renders correctly at native; the rest follow the
-  /// user's setting (see dr_settings::res_scale_gcn).
+  /// user's setting (see DrSettings::resScaleGcn).
   if (minigame->quirks.dolphin.needs_native_resolution)
   {
     log(DR_LOG_INFO, "Mini-game requires native resolution, enabling...");

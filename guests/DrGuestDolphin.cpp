@@ -1,4 +1,5 @@
 #include "DrGuestDolphin.h"
+#include "DrPaths.h"
 
 #include <QDir>
 #include <QFile>
@@ -28,7 +29,7 @@ DrGuestDolphin::DrGuestDolphin(
   m_dolphin->setCore(new QRetro());
   setRetro(m_dolphin);
   dr_apply_global_core_options(core(), DR_CORE_DOLPHIN);
-  m_retro->setCorePath(dr_core_path(DR_CORE_DOLPHIN).toStdString());
+  m_retro->setCorePath(DrPaths::instance().corePath(DR_CORE_DOLPHIN).toStdString());
 
   /* Pretend not to support gyro/accel so the core doesn't try to use it */
   core()->setEnvironmentCallbackSupported(

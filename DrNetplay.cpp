@@ -1,4 +1,8 @@
 #include "DrNetplay.h"
+#include "DrRandom.h"
+#include "DrPaths.h"
+
+#include <algorithm>
 
 #include <QApplication>
 #include <QDataStream>
@@ -21,6 +25,7 @@
 
 #include "DrCommon.h"
 #include "DrInputStore.h"
+#include "DrSettings.h"
 #include "QRetroInputBackendShared.h"
 
 #ifndef DR_GIT_HASH
@@ -102,10 +107,14 @@ static void dr_extract_directory(const QByteArray &payload, const QString &root)
   }
 }
 
+DrNetplay *DrNetplay::s_Instance = nullptr;
+
 DrNetplay::DrNetplay(DrInputStore *store, QObject *parent)
   : QObject(parent)
   , m_Store(store)
 {
+  s_Instance = this;
+
   /* Catch keyboard events app-wide so the local pipeline sees them regardless
    * of which core window has focus. */
   if (qApp)
@@ -136,7 +145,6 @@ bool DrNetplay::eventFilter(QObject *watched, QEvent *event)
 void DrNetplay::hostSession(quint16 port, int playerCount)
 {
   m_IsServer = true;
-  dr_set_netplay_server(true);
   m_PeerIndex = 0;
   m_PeerCount = qBound(1, playerCount, DR_NETPLAY_MAX_PEERS);
   m_NextAssignIndex = 1;
@@ -161,7 +169,7 @@ void DrNetplay::startGame(int gameId, const QStringList &saveFilters, const QStr
   /* Seed the shared PRNG so every peer rolls identical minigame candidates, and
    * ship the seed alongside the game so clients seed the same. */
   const quint32 seed = QRandomGenerator::global()->generate();
-  dr_srand(seed);
+  DrRandom::instance().seed(seed);
 
   QByteArray payload;
   payload.append(static_cast<char>(gameId));
@@ -176,16 +184,17 @@ void DrNetplay::startGame(int gameId, const QStringList &saveFilters, const QStr
 
   /* Share the mini-game filter */
   broadcastVar(DR_NETPLAY_PACKET_MINIGAME_FILTER, m_MinigameFilter);
+  broadcastSettings();
 
   /* Perform save synchronization */
   {
-    const QByteArray bundle = dr_bundle_directory(dr_save_directory(), saveFilters);
+    const QByteArray bundle = dr_bundle_directory(DrPaths::instance().saveDirectory(), saveFilters);
     broadcastVar(DR_NETPLAY_PACKET_SAVE, bundle);
     emit logMessage(DR_LOG_INFO,
       QString("netplay: sent save (%1 KiB) for %2 from %3")
         .arg(bundle.size() / 1024)
         .arg(saveFilters.isEmpty() ? QStringLiteral("(all)") : saveFilters.join(", "))
-        .arg(dr_save_directory()));
+        .arg(DrPaths::instance().saveDirectory()));
   }
 
   broadcastVar(DR_NETPLAY_PACKET_START, payload);
@@ -196,7 +205,6 @@ void DrNetplay::startGame(int gameId, const QStringList &saveFilters, const QStr
   broadcast(DR_NETPLAY_PACKET_SET_DELAY, delayPayload);
 
   m_Active = true;
-  dr_set_netplay_active(true);
   resetFrameCounter();
   emit logMessage(DR_LOG_INFO,
     QString("netplay: server starting game %1, peers=%2, sockets=%3")
@@ -398,6 +406,48 @@ void DrNetplay::setMinigameFilter(const QByteArray &payload)
     broadcastVar(DR_NETPLAY_PACKET_MINIGAME_FILTER, payload);
 }
 
+void DrNetplay::setOwnedGuests(const QSet<int> &guests)
+{
+  m_OwnedGuests = guests;
+}
+
+void DrNetplay::broadcastSettings(void)
+{
+  if (m_IsServer)
+    broadcastVar(DR_NETPLAY_PACKET_SETTINGS, DrSettings::instance().encodeInherited());
+}
+
+void DrNetplay::updateMissingGuests(void)
+{
+  QSet<int> missing;
+
+  for (const QSet<int> &theirs : m_PeerGuests)
+    missing |= m_OwnedGuests - theirs;
+  emit missingGuestsChanged(missing);
+}
+
+QByteArray DrNetplay::encodeGuests(const QSet<int> &guests)
+{
+  QList<int> sorted = guests.values();
+  QByteArray payload;
+
+  std::sort(sorted.begin(), sorted.end());
+  for (int guest : sorted)
+    payload.append(static_cast<char>(guest));
+
+  return payload;
+}
+
+QSet<int> DrNetplay::decodeGuests(const QByteArray &payload)
+{
+  QSet<int> guests;
+
+  for (char guest : payload)
+    guests.insert(static_cast<quint8>(guest));
+
+  return guests;
+}
+
 void DrNetplay::setActiveContext(QRetro *core)
 {
   const int ctx = m_ContextIds.value(core, -1);
@@ -474,7 +524,6 @@ void DrNetplay::freezeActiveContext()
 void DrNetplay::joinSession(const QString &address, quint16 port)
 {
   m_IsServer = false;
-  dr_set_netplay_server(false);
 
   auto *sock = new QTcpSocket(this);
   m_Sockets.append(sock);
@@ -831,6 +880,8 @@ void DrNetplay::onNewConnection()
     payload.append(static_cast<char>(index));
     payload.append(static_cast<char>(m_PeerCount));
     writeMessage(sock, DR_NETPLAY_PACKET_HANDSHAKE, payload);
+    writeVarMessage(sock, DR_NETPLAY_PACKET_OWNED_GUESTS, encodeGuests(m_OwnedGuests));
+    writeVarMessage(sock, DR_NETPLAY_PACKET_SETTINGS, DrSettings::instance().encodeInherited());
 
     emit peerCountChanged(m_Sockets.size() + 1, m_PeerCount);
   }
@@ -854,7 +905,8 @@ void DrNetplay::onSocketReadyRead()
     /* Variable-length messages are framed [type][u32 len][payload]. */
     if (type == DR_NETPLAY_PACKET_RESYNC_STATE || type == DR_NETPLAY_PACKET_MINIGAME_FILTER ||
         type == DR_NETPLAY_PACKET_SAVE || type == DR_NETPLAY_PACKET_LAUNCH ||
-        type == DR_NETPLAY_PACKET_START)
+        type == DR_NETPLAY_PACKET_START || type == DR_NETPLAY_PACKET_OWNED_GUESTS ||
+        type == DR_NETPLAY_PACKET_SETTINGS)
     {
       if (buf.size() < 1 + 4)
         break;
@@ -905,6 +957,7 @@ void DrNetplay::handleMessage(QTcpSocket *sock, quint8 type, const QByteArray &p
       const QByteArray v =
         QByteArray(DR_NETPLAY_BUILD_HASH).leftJustified(DR_NETPLAY_VERSION_HASH_LEN, '\0', true);
       writeMessage(sock, DR_NETPLAY_PACKET_VERSION, v);
+      writeVarMessage(sock, DR_NETPLAY_PACKET_OWNED_GUESTS, encodeGuests(m_OwnedGuests));
     }
     break;
 
@@ -929,13 +982,13 @@ void DrNetplay::handleMessage(QTcpSocket *sock, quint8 type, const QByteArray &p
      * directory at it, so the host we build on START loads the host's save
      * instead of ours (and never touches our real save). Computed from the base
      * save dir so repeated joins don't nest netplay/netplay/... */
-    QString base = dr_save_directory();
+    QString base = DrPaths::instance().saveDirectory();
     if (base.endsWith("/netplay"))
       base.chop(QStringLiteral("/netplay").size());
     const QString netplayDir = base + "/netplay";
 
     dr_extract_directory(payload, netplayDir);
-    dr_set_save_directory(netplayDir);
+    DrPaths::instance().setSaveDirectory(netplayDir);
     emit logMessage(DR_LOG_INFO,
       QString("netplay: received save (%1 KiB), using %2").arg(payload.size() / 1024).arg(netplayDir));
     break;
@@ -954,9 +1007,8 @@ void DrNetplay::handleMessage(QTcpSocket *sock, quint8 type, const QByteArray &p
     }
     const QString customRom = QString::fromUtf8(payload.mid(5));
 
-    dr_srand(seed);
+    DrRandom::instance().seed(seed);
     m_Active = true;
-    dr_set_netplay_active(true);
     resetFrameCounter();
     emit logMessage(DR_LOG_INFO,
       QString("netplay: client received start, game %1%2, peers=%3")
@@ -1093,6 +1145,46 @@ void DrNetplay::handleMessage(QTcpSocket *sock, quint8 type, const QByteArray &p
       requestHardResync();
     break;
 
+  case DR_NETPLAY_PACKET_OWNED_GUESTS:
+  {
+    const QSet<int> guests = decodeGuests(payload);
+
+    if (m_IsServer)
+    {
+      m_PeerGuests.insert(sock, guests);
+      emit logMessage(DR_LOG_INFO,
+        QString("netplay: peer owns %1 of our %2 guests")
+          .arg((m_OwnedGuests & guests).size())
+          .arg(m_OwnedGuests.size()));
+      updateMissingGuests();
+    }
+    else
+    {
+      emit logMessage(DR_LOG_INFO,
+        QString("netplay: host owns %1 of our %2 guests")
+          .arg((m_OwnedGuests & guests).size())
+          .arg(m_OwnedGuests.size()));
+      emit hostGuestsReceived(guests);
+    }
+    break;
+  }
+
+  case DR_NETPLAY_PACKET_SETTINGS:
+    if (!m_IsServer)
+    {
+      QStringList values;
+      unsigned i;
+
+      DrSettings::instance().applyHost(payload);
+      for (i = 0; i < DR_SETTING_SIZE; i++)
+        if (DrSettings::table[i].host_inherited)
+          values.append(QString("%1=%2").arg(DrSettings::table[i].name)
+            .arg(DrSettings::instance().value(static_cast<dr_setting_id>(i))));
+      emit logMessage(DR_LOG_INFO, QString("netplay: host settings %1").arg(values.join(", ")));
+      emit hostSettingsReceived();
+    }
+    break;
+
   default:
     break;
   }
@@ -1112,6 +1204,8 @@ void DrNetplay::onSocketDisconnected()
     m_Sockets.removeAll(sock);
     m_RxBuf.remove(sock);
     sock->deleteLater();
+    if (m_IsServer && m_PeerGuests.remove(sock))
+      updateMissingGuests();
     if (m_IsServer && m_NextAssignIndex > 1)
       m_NextAssignIndex--;
     emit peerCountChanged(m_Sockets.size() + 1, m_PeerCount);
@@ -1170,8 +1264,8 @@ void DrNetplay::runResync(int context)
       s << static_cast<quint64>(newFrame);
       /* Ship the shared PRNG state too -- it lives outside the savestate, so peers must
        * realign it to stay in lockstep after the resync. */
-      s << static_cast<quint32>(dr_rand_state());
-      s << static_cast<quint64>(dr_rand_count());
+      s << static_cast<quint32>(DrRandom::instance().state());
+      s << static_cast<quint64>(DrRandom::instance().count());
     }
     payload.append(qCompress(raw));
     QMetaObject::invokeMethod(
@@ -1220,7 +1314,7 @@ void DrNetplay::runResync(int context)
       emit logMessage(DR_LOG_ERROR, "netplay: hard resync unserialize failed");
 
     /* Realign the shared PRNG to the host's, alongside the loaded state. */
-    dr_set_rand_state(randState, randCount);
+    DrRandom::instance().setState(randState, randCount);
 
     {
       QMutexLocker lock(&m_RecvMutex);
@@ -1348,7 +1442,6 @@ void DrNetplay::dropSession(const QString &reason)
     return;
 
   m_Active = false;
-  dr_set_netplay_active(false);
 
   for (QTcpSocket *sock : m_Sockets)
   {
@@ -1358,6 +1451,7 @@ void DrNetplay::dropSession(const QString &reason)
   }
   m_Sockets.clear();
   m_RxBuf.clear();
+  m_PeerGuests.clear();
 
   if (m_Server)
   {

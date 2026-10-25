@@ -1,4 +1,5 @@
 #include "MarioTennis.h"
+#include "DrRandom.h"
 
 #include <QFile>
 #include <QRetro.h>
@@ -207,8 +208,8 @@ void MarioTennis::doApplyGameData(const DrGameData &data)
   m_allCpuFrames = 0;
   m_retro->loadState(state());
   bool doubles = (minigame->type == DR_MINIGAME_2V2);
-  unsigned long rc = dr_rand_count();
-  uint8_t court = (minigame->minigame_id == 0x06) ? 0x10 : (uint8_t)(dr_rand() % 16);
+  unsigned long rc = DrRandom::instance().count();
+  uint8_t court = (minigame->minigame_id == 0x06) ? 0x10 : (uint8_t)(DrRandom::instance().next() % 16);
   log(DR_LOG_INFO, qPrintable(QString("MT court=%1 id=0x%2 randcount=%3")
                        .arg(court).arg(minigame->minigame_id, 2, 16, QChar('0')).arg(rc)));
   m_retro->writeValue(court, MT_COURT);

@@ -1,4 +1,6 @@
 #include "MarioParty8Host.h"
+#include "DrRandom.h"
+#include "DrPaths.h"
 
 #include "asm/mp8.h"
 
@@ -229,8 +231,8 @@ static DrGcnHostConfig makeConfig(const std::string &game)
 {
   DrGcnHostConfig config = {};
 
-  config.core = dr_core_path(DR_CORE_DOLPHIN).toStdString();
-  config.game = (dr_roms_directory() + "/Mario Party 8 (USA, Asia) (Rev 2).rvz").toStdString();
+  config.core = DrPaths::instance().corePath(DR_CORE_DOLPHIN).toStdString();
+  config.game = (DrPaths::instance().romsDirectory() + "/Mario Party 8 (USA, Asia) (Rev 2).rvz").toStdString();
   if (!game.empty())
     config.game = game;
 
@@ -378,7 +380,7 @@ const struct mp8_battle_payout *MarioParty8Host::battlePayout(const int placemen
   /* Hand out remainder */
   while (remainder > 0 && payees)
   {
-    payout[paid[dr_rand() % payees]]++;
+    payout[paid[DrRandom::instance().next() % payees]]++;
     remainder--;
   }
 

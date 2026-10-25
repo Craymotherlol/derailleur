@@ -1,4 +1,5 @@
 #include "MarioParty6Host.h"
+#include "DrPaths.h"
 
 #include "asm/mp6.h"
 
@@ -179,8 +180,8 @@ static DrGcnHostConfig makeConfig(const std::string &game)
 {
   DrGcnHostConfig config = {};
 
-  config.core = dr_core_path(DR_CORE_DOLPHIN).toStdString();
-  config.game = (dr_roms_directory() + "/Mario Party 6 (USA).rvz").toStdString();
+  config.core = DrPaths::instance().corePath(DR_CORE_DOLPHIN).toStdString();
+  config.game = (DrPaths::instance().romsDirectory() + "/Mario Party 6 (USA).rvz").toStdString();
   if (!game.empty())
     config.game = game;
 

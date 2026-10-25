@@ -1,4 +1,6 @@
 #include "MarioPartyDSHost.h"
+#include "DrNetplay.h"
+#include "DrPaths.h"
 
 #include "asm/mpds.h"
 
@@ -364,10 +366,10 @@ static int mpds_difficulty_id(dr_difficulty difficulty)
 MarioPartyDSHost::MarioPartyDSHost(QObject *parent)
   : DrHostDS(parent)
 {
-  const QString corePath = dr_core_path(DR_CORE_MELONDSDS);
+  const QString corePath = DrPaths::instance().corePath(DR_CORE_MELONDSDS);
 
   m_retro->setCore(new QRetro());
-  m_retro->setGamePath((dr_roms_directory() + "/Mario Party DS (USA) (Rev 2).nds").toStdString());
+  m_retro->setGamePath((DrPaths::instance().romsDirectory() + "/Mario Party DS (USA) (Rev 2).nds").toStdString());
 
   /* Hint to use up to 4 controllers */
   core()->input()->setMaxUsers(MPDS_PORTS);
@@ -399,7 +401,7 @@ MarioPartyDSHost::MarioPartyDSHost(QObject *parent)
   }
 
   core()->directories()->set(
-    QRetroDirectories::Save, dr_save_directory().toUtf8().constData());
+    QRetroDirectories::Save, DrPaths::instance().saveDirectory().toUtf8().constData());
 
   if (!core()->loadContent(m_retro->gamePath().c_str()))
   {
@@ -673,7 +675,7 @@ void MarioPartyDSHost::updateHexShow(void)
     m_hexShow[port] = 0;
 
   /* Netplay: only your own hexes are revealed. */
-  if (dr_netplay_active())
+  if (DrNetplay::sessionActive())
   {
     const int local = localPlayer();
 

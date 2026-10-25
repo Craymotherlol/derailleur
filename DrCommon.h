@@ -4,8 +4,8 @@
 #include <QFile>
 #include <QString>
 
-static const char *const DERAILLEUR_DATE_STRING = "October 4, 2026";
-static const char *const DERAILLEUR_RELEASE_STRING = "r12";
+static const char *const DERAILLEUR_DATE_STRING = "October 24, 2026";
+static const char *const DERAILLEUR_RELEASE_STRING = "r13";
 
 #define DR_CONTROL_PORT_P1 0
 #define DR_CONTROL_PORT_P2 1
@@ -1054,76 +1054,14 @@ typedef struct
   dr_value_type type;
 } dr_value_t;
 
-/// dr_settings::resident_guests value that never unloads a guest.
-#define DR_RESIDENT_GUESTS_ALL 0xFFFFFFFFu
-
-struct dr_settings
-{
-  /// Show the loading overlay (frozen frame + bouncing icon, see DrOverlay) that
-  /// covers core swaps. On by default; turning it off shows the raw swap instead.
-  bool loading_overlay = true;
-
-  /// Mute a guest's core while it boots and loads, up until its mini-game starts.
-  /// On by default; turning it off lets the boot noise through.
-  bool mute_while_loading = true;
-
-  /// Build Waluigi and Daisy into the Mario Party 1 and 2 ROMs (via partystuffer)
-  /// so a player who picked them appears as themselves rather than a stand-in.
-  /// Off by default: it swaps those guests onto a boot-patch path that reaches the
-  /// mini-game by booting a rebuilt ROM instead of loading the shipped savestate.
-  bool character_injection = false;
-
-  /// Internal resolution multiplier per system, 1 = that system's native. The
-  /// core options they drive are per-core; see dr_apply_global_core_options.
-  unsigned res_scale_n64 = 2;
-  unsigned res_scale_gcn = 1;
-  unsigned res_scale_ds = 2;
-
-  /// Force every core to render 16:9 rather than the games' native 4:3 (see
-  /// dr_apply_global_core_options). Off by default; the games were not made for
-  /// it, so expect stretched HUDs and objects popping in at the edges.
-  bool widescreen_hack = false;
-
-  /// How many of the most recently played guests keep their emulator loaded
-  /// between mini-games; older ones are unloaded and boot again when next picked.
-  unsigned resident_guests = 0;
-};
-
-dr_settings &dr_settings_get(void);
-void dr_settings_load(void);
-void dr_settings_save(void);
-
-QString dr_roms_directory(void);
-void dr_set_roms_directory(const QString &path);
-QString dr_cores_directory(void);
-void dr_set_cores_directory(const QString &path);
-QString dr_state_directory(void);
-void dr_set_state_directory(const QString &path);
-QString dr_save_directory(void);
-void dr_set_save_directory(const QString &path);
-QString dr_core_path(dr_core core);
-
 /// The dynamic library extension for the current platform (".dll" or ".so").
-QString dr_os_extension(void);
-
-void dr_srand(unsigned seed);
-
-/// Whether a netplay session is currently active. Set by DrNetplay so code without a
-/// DrNetplay handle (e.g. guests) can gate netplay-only behavior.
-bool dr_netplay_active(void);
-void dr_set_netplay_active(bool active);
-
-/// Whether this instance is the server of an active netplay session.
-bool dr_netplay_is_server(void);
-void dr_set_netplay_server(bool server);
-
-int dr_rand(void);
-
-unsigned long dr_rand_count(void);
-
-/// Read/restore the raw PRNG state, so a netplay hard resync can realign the shared
-/// dr_rand sequence (which is not part of the emulator savestate).
-unsigned dr_rand_state(void);
-void dr_set_rand_state(unsigned state, unsigned long count);
+static inline QString dr_os_extension(void)
+{
+#if defined(Q_OS_WIN)
+  return ".dll";
+#else
+  return ".so";
+#endif
+}
 
 #endif

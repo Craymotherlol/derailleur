@@ -1,4 +1,5 @@
 #include "MarioPartyGcnHost.h"
+#include "DrPaths.h"
 
 #include <QRetro.h>
 #include <QRetroDirectories.h>
@@ -101,7 +102,7 @@ MarioPartyGcnHost::MarioPartyGcnHost(const DrGcnHostConfig &config, QObject *par
   }
 
   core()->directories()->set(
-    QRetroDirectories::Save, dr_save_directory().toUtf8().constData());
+    QRetroDirectories::Save, DrPaths::instance().saveDirectory().toUtf8().constData());
 
   /* Forced core options go in before the content does, while the core is still
    * reading its settings. */
@@ -201,7 +202,7 @@ void MarioPartyGcnHost::stampBattleIcons(void)
 
     for (const char *const *entry = m_config.battle_icons.dirs; *entry; entry++)
     {
-      const QString dir = dr_save_directory() + *entry;
+      const QString dir = DrPaths::instance().saveDirectory() + *entry;
       const QString path = dir + "/" + m_config.battle_icons.files[i];
 
       if (!QDir().mkpath(dir))

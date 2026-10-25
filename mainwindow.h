@@ -18,6 +18,7 @@
 #include "DrNetplay.h"
 #include "DrNetplayWidget.h"
 #include "DrOverlay.h"
+#include "DrSettingsPage.h"
 #include "DrToolWindow.h"
 
 class QRetro;
@@ -75,7 +76,7 @@ private:
   void trackOverlay();
 
   /// The loading overlay, or null when the user has turned it off.
-  DrOverlay *overlay(void) { return dr_settings_get().loading_overlay ? m_Overlay : nullptr; }
+  DrOverlay *overlay(void) { return DrSettings::instance().loadingOverlay() ? m_Overlay : nullptr; }
 
   int m_NetplayPeerIndex = 0;
   QString m_CustomRom;
@@ -90,6 +91,7 @@ private:
   DrLogger *m_Logger = nullptr;
   DrHostPicker *m_Picker = nullptr;
   DrMinigameFilter *m_Filter = nullptr;
+  DrSettingsPage *m_Settings = nullptr;
   DrDebug *m_Debug = nullptr;
   DrChallenge *m_Challenge = nullptr;
   DrOverlay *m_Overlay = nullptr;

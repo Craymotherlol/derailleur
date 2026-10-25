@@ -1,4 +1,6 @@
 #include "KirbyAirRide.h"
+#include "DrRandom.h"
+#include "DrPaths.h"
 
 // Addresses
 static const dr_value_t KAR_COLOR[4] = {
@@ -106,7 +108,7 @@ static const dr_mp_minigame_t KAR_MINIGAMES[] =
 };
 
 KirbyAirRide::KirbyAirRide(QObject *parent)
-  : DrGuestGcn("gcn-kar", (dr_roms_directory() + "/Kirby Air Ride (USA)").toStdString(), parent)
+  : DrGuestGcn("gcn-kar", (DrPaths::instance().romsDirectory() + "/Kirby Air Ride (USA)").toStdString(), parent)
 {
 }
 
@@ -156,16 +158,16 @@ void KirbyAirRide::doApplyGameData(const DrGameData &data)
   switch (minigame->minigame_id)
   {
   case KAR_STADIUM_DRAG_RACE_1:
-    stadium = KAR_STADIUM_DRAG_RACE_1 + (dr_rand() % 4);
+    stadium = KAR_STADIUM_DRAG_RACE_1 + (DrRandom::instance().next() % 4);
     break;
   case KAR_STADIUM_KIRBY_MELEE_1:
-    stadium = KAR_STADIUM_KIRBY_MELEE_1 + (dr_rand() % 2);
+    stadium = KAR_STADIUM_KIRBY_MELEE_1 + (DrRandom::instance().next() % 2);
     break;
   case KAR_STADIUM_DESTRUCTION_DERBY_1:
-    stadium = KAR_STADIUM_DESTRUCTION_DERBY_1 + (dr_rand() % 3); // % 5
+    stadium = KAR_STADIUM_DESTRUCTION_DERBY_1 + (DrRandom::instance().next() % 3); // % 5
     break;
   case KAR_STADIUM_SINGLE_RACE_FANTASY_MEADOWS:
-    stadium = KAR_STADIUM_SINGLE_RACE_FANTASY_MEADOWS; // + (dr_rand() % 9);
+    stadium = KAR_STADIUM_SINGLE_RACE_FANTASY_MEADOWS; // + (DrRandom::instance().next() % 9);
     break;
   default:
     stadium = static_cast<uint8_t>(minigame->minigame_id);

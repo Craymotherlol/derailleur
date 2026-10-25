@@ -1,4 +1,5 @@
 #include "DrGuestRetro.h"
+#include "DrSettings.h"
 
 #include <QRetro.h>
 #include <QRetroAudio.h>
@@ -42,7 +43,7 @@ void DrGuestRetro::frameBegin(void)
       if (--m_muteFrames == 0 && m_minigameActive)
         audio->setMute(false);
     }
-    else if (!m_minigameActive && dr_settings_get().mute_while_loading)
+    else if (!m_minigameActive && DrSettings::instance().muteWhileLoading())
       audio->setMute(true);
   }
 

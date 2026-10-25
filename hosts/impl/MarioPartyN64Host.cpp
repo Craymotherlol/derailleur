@@ -1,4 +1,6 @@
 #include "MarioPartyN64Host.h"
+#include "DrRandom.h"
+#include "DrPaths.h"
 
 #include <QRetro.h>
 #include <QRetroDirectories.h>
@@ -149,7 +151,7 @@ void MarioPartyN64Host::run(void)
 
     /* MP1: randomize the title-screen image on entry to the Intro scene (0x61). */
     if (game() == DR_GAME_MARIOPARTY1 && (uint8_t)scene_id == 0x61)
-      m_retro->writeValue(dr_rand() % 7, MP1_TITLE_IMAGE);
+      m_retro->writeValue(DrRandom::instance().next() % 7, MP1_TITLE_IMAGE);
 
     /* Item mini-games play natively with a single participant. Grant that player golf
      * mode (0 input delay, priority) on entry and clear it on exit. The participant is
@@ -363,7 +365,7 @@ void MarioPartyN64Host::run(void)
       {
         m_lastMinigameId = -1;
         m_retro->writeValue(-1, m_config.values.minigame_id);
-        m_itemChosenId = 0x3B + (dr_rand() % 6);
+        m_itemChosenId = 0x3B + (DrRandom::instance().next() % 6);
         m_itemPending = true;
         m_itemSceneLeft = false;
         break;
@@ -600,10 +602,10 @@ MarioPartyN64Host::MarioPartyN64Host(const DrHostConfig &config, QObject *parent
   }
 
   /* Read/write the save from the derailleur save dir (default cwd/save). A netplay
-   * client redirects dr_save_directory() to its per-session netplay dir before
+   * client redirects DrPaths' save directory to its per-session netplay dir before
    * building us, so we load the host's save. Set before loadContent (SRAM read). */
   core()->directories()->set(
-    QRetroDirectories::Save, dr_save_directory().toUtf8().constData());
+    QRetroDirectories::Save, DrPaths::instance().saveDirectory().toUtf8().constData());
 
   if (!core()->loadContent(config.game.c_str()))
   {

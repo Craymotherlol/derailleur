@@ -1,4 +1,5 @@
 #include "SmashRemix.h"
+#include "DrRandom.h"
 
 #include <QApplication>
 #include <QDir>
@@ -769,7 +770,7 @@ static const sr_stage_t *srRandomStage(void)
   if (!count)
     return &SR_STAGES[0];
 
-  pick = dr_rand() % count;
+  pick = DrRandom::instance().next() % count;
   for (i = 0; i < sizeof(SR_STAGES) / sizeof(*SR_STAGES); i++)
     if (SR_STAGES[i].selectable && !pick--)
       return &SR_STAGES[i];
@@ -1066,7 +1067,7 @@ void SmashRemix::doApplyGameData(const DrGameData &data)
   m_retro->loadState(state());
 
   /* Use a random selectable stage */
-  unsigned long rc = dr_rand_count();
+  unsigned long rc = DrRandom::instance().count();
   const sr_stage_t *stage = srRandomStage();
   log(DR_LOG_INFO, qPrintable(QString("SR stage=%1 (0x%2) randcount=%3")
                                 .arg(stage->name)

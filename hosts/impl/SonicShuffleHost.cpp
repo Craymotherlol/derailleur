@@ -1,4 +1,5 @@
 #include "SonicShuffleHost.h"
+#include "DrPaths.h"
 #include "SonicShuffleHand.h"
 
 #include <QRetro.h>
@@ -40,11 +41,11 @@ static const dr_value_t SSH_SEL_CARD_CHOSEN = { 0x0032E538, DR_VALUE_TYPE_U32 };
 SonicShuffleHost::SonicShuffleHost(QObject *parent)
   : DrHostRetro(parent)
 {
-  const QString corePath = dr_core_path(DR_CORE_FLYCAST);
+  const QString corePath = DrPaths::instance().corePath(DR_CORE_FLYCAST);
 
   setRetro(new DrRetro(this));
   m_retro->setCore(new QRetro());
-  m_retro->setGamePath((dr_roms_directory() + "/Sonic Shuffle (USA).chd").toStdString());
+  m_retro->setGamePath((DrPaths::instance().romsDirectory() + "/Sonic Shuffle (USA).chd").toStdString());
   dr_apply_global_core_options(core(), DR_CORE_FLYCAST);
 
   if (!core()->loadCore(corePath.toUtf8().constData()))
@@ -83,7 +84,7 @@ void SonicShuffleHost::startCore(void)
     /* Save from the derailleur save dir; a netplay client redirects it to the
      * host's save (set before loadContent so the VMU read picks it up). */
     core()->directories()->set(
-      QRetroDirectories::Save, dr_save_directory().toUtf8().constData());
+      QRetroDirectories::Save, DrPaths::instance().saveDirectory().toUtf8().constData());
     if (!core()->loadContent(m_retro->gamePath().c_str()))
     {
       log(DR_LOG_ERROR,

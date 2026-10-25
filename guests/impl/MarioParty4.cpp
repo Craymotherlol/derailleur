@@ -1,4 +1,6 @@
 #include "MarioParty4.h"
+#include "DrRandom.h"
+#include "DrPaths.h"
 
 #include <cstring>
 
@@ -149,7 +151,7 @@ static MpGcnConfig buildConfig()
 {
   MpGcnConfig config = {};
 
-  config.game = (dr_roms_directory() + "/Mario Party 4 (USA) (Rev 1)").toStdString();
+  config.game = (DrPaths::instance().romsDirectory() + "/Mario Party 4 (USA) (Rev 1)").toStdString();
   config.state = "mp4";
 
   config.scene_miniexplain = 0x03;
@@ -209,7 +211,7 @@ void MarioParty4::doApplyGameData(const DrGameData &data)
   MarioPartyGcn::doApplyGameData(data);
 
   /* Randomize the board to get a random host character */
-  const int64_t board = dr_rand() % MP4_BOARD_COUNT;
+  const int64_t board = DrRandom::instance().next() % MP4_BOARD_COUNT;
 
   m_retro->writeValue(board, MP4_BOARD);
   log(DR_LOG_INFO, qPrintable(QString("board: %1").arg(board)));

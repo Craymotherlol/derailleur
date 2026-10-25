@@ -1,4 +1,6 @@
 #include "MarioParty8.h"
+#include "DrNetplay.h"
+#include "DrPaths.h"
 
 #include <QRetro.h>
 
@@ -436,7 +438,7 @@ static const dr_core_option_t MP8_OPTIONS[] = {
 };
 
 MarioParty8::MarioParty8(QObject *parent)
-  : DrGuestWii("wii-mp8", (dr_roms_directory() + "/Mario Party 8 (USA, Asia) (Rev 2)").toStdString(), parent)
+  : DrGuestWii("wii-mp8", (DrPaths::instance().romsDirectory() + "/Mario Party 8 (USA, Asia) (Rev 2)").toStdString(), parent)
 {
   setOptions(MP8_OPTIONS);
 }
@@ -466,7 +468,7 @@ void MarioParty8::run()
     else if (m_minigame && val == m_minigame->scene_id)
       applyControlRemap(m_minigame->quirks, m_players);
 
-    if (m_minigame && val == m_minigame->scene_id && dr_netplay_is_server())
+    if (m_minigame && val == m_minigame->scene_id && DrNetplay::sessionServer())
       emit hardResync();
 
     /* Once the scene leaves the mini-game (its own scene_id), the explanation

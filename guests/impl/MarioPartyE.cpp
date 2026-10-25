@@ -1,4 +1,5 @@
 #include "MarioPartyE.h"
+#include "DrPaths.h"
 
 #include <QFile>
 #include <QRetro.h>
@@ -81,7 +82,7 @@ void MarioPartyE::doApplyGameData(const DrGameData &data)
   const dr_mp_minigame_t *minigame = data.minigame;
 
   m_winners = 0;
-  QString stateFile = dr_state_directory()
+  QString stateFile = DrPaths::instance().stateDirectory()
     + QString("/mpe/mpe-%1.state.zip").arg(minigame->minigame_id, 2, 10, QChar('0'));
   core()->unserializeFromFile(stateFile);
   log(DR_LOG_INFO, qPrintable(QString("loading %1 from %2").arg(minigame->name).arg(stateFile)));

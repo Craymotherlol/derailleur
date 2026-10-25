@@ -1,4 +1,5 @@
 #include "DrHosts.h"
+#include "DrPaths.h"
 
 #include "impl/MarioParty1Host.h"
 #include "impl/MarioParty2Host.h"
@@ -64,5 +65,5 @@ const DrHostEntry *dr_host_entry(dr_game game)
 
 QString dr_host_rom_path(const DrHostEntry *entry)
 {
-  return dr_roms_directory() + "/" + entry->rom;
+  return DrPaths::instance().romsDirectory() + "/" + entry->rom;
 }

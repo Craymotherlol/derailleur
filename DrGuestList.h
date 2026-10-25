@@ -49,6 +49,9 @@ public:
   /// across netplay peers.
   bool guestHasCandidate(DrGuest *guest) const;
 
+  /// Leaves these guests out of every pick, for games a netplay host does not own.
+  void setExcludedGuests(const QSet<dr_guest> &guests);
+
 signals:
   void minigameFinished();
   void logMessage(unsigned level, const QString &message);
@@ -62,6 +65,7 @@ private:
   DrGuest *m_activeGuest = nullptr;
   QList<DrGuest *> m_recent; /* launched guests, most recent first */
   QSet<dr_minigame_key_t> m_disabled; /* disabled mini-game keys, see dr_minigame_key */
+  QSet<dr_guest> m_excluded;
 
   /* Rolled candidate cache, indexed by dr_minigame_type then dr_mic_mode. Every
    * mode is rolled up front so a board that only learns which list it wants once

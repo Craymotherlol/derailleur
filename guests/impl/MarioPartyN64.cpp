@@ -1,10 +1,13 @@
 #include "MarioPartyN64.h"
+#include "DrRandom.h"
+#include "DrPaths.h"
 
 #include <QDir>
 #include <QDirIterator>
 #include <QFile>
 #include <QTemporaryDir>
 
+#include "DrSettings.h"
 #include "partystuffer.h"
 
 /* Frames the mini-game id is held for when booting from a savestate. */
@@ -143,8 +146,8 @@ void MarioPartyN64::seedRng()
   if (!m_config.seed_rng || !m_config.rng.address)
     return;
 
-  /* dr_rand is shared and lockstepped, so netplay peers seed identically. */
-  const uint32_t seed = static_cast<uint32_t>(dr_rand());
+  /* DrRandom is shared and lockstepped, so netplay peers seed identically. */
+  const uint32_t seed = static_cast<uint32_t>(DrRandom::instance().next());
 
   m_retro->writeValue(seed, m_config.rng);
   log(DR_LOG_INFO, qPrintable(QString("RNG seed: 0x%1").arg(seed, 8, 16, QChar('0'))));
@@ -237,7 +240,7 @@ void MarioPartyN64::buildCharacterRom(const DrGameData &data)
   } injectable[] = { { DR_CHARACTER_WALUIGI, "waluigi" }, { DR_CHARACTER_DAISY, "daisy" } };
 
   const QString target = QString::fromStdString(m_config.temp_rom);
-  QString source = dr_roms_directory() + "/" + m_config.rom;
+  QString source = DrPaths::instance().romsDirectory() + "/" + m_config.rom;
   unsigned characters[4] = { 0, 0, 0, 0 };
   QTemporaryDir packages;
   unsigned i, j;
@@ -299,13 +302,13 @@ void MarioPartyN64::onBeforeBoot(const DrGameData &data)
    * gamePath() is read right after this returns, and a relaunch keeps whatever
    * was built then. */
   if (m_config.boot_patches[0].when.address != 0 &&
-      m_injection != dr_settings_get().character_injection)
+      m_injection != DrSettings::instance().characterInjection())
   {
     unload();
-    m_injection = dr_settings_get().character_injection;
+    m_injection = DrSettings::instance().characterInjection();
     m_romBuilt = false;
     m_bootStateSaved = false;
-    m_retro->setGamePath((dr_roms_directory() + "/" + m_config.rom).toStdString());
+    m_retro->setGamePath((DrPaths::instance().romsDirectory() + "/" + m_config.rom).toStdString());
   }
 
   if (m_romBuilt || m_config.temp_rom.empty() || !bootsWithoutState())

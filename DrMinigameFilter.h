@@ -2,6 +2,7 @@
 #define DR_MINIGAME_FILTER_H
 
 #include <QByteArray>
+#include <QHash>
 #include <QList>
 #include <QSet>
 #include <QString>
@@ -50,6 +51,11 @@ public:
   /// populate() alone leaves everything allowed.
   void restoreLastList(void);
 
+  /// Holds every mini-game of `guests` off and greyed out, on top of the user's
+  /// selection, emitting filterChanged if that changes the payload. Their own
+  /// ticks come back when released.
+  void setForcedOff(const QSet<dr_guest> &guests);
+
 signals:
   /// Emitted when the user changes the selection. Coalesced so a single click on
   /// a guest's tristate box (which cascades to its children) emits once.
@@ -73,8 +79,12 @@ private:
   /// Every disabled key: unchecked leaves plus keys for games not loaded here.
   QSet<dr_minigame_key_t> disabledKeys(void) const;
 
-  /// Tick every leaf not in `disabled`, keeping the keys no leaf matches.
-  void applyDisabled(const QSet<dr_minigame_key_t> &disabled);
+  /// disabledKeys plus every key of a forced-off game.
+  QSet<dr_minigame_key_t> payloadKeys(void) const;
+
+  /// Tick every leaf not in `disabled`, keeping the keys no leaf matches. A
+  /// forced-off leaf keeps its tick for later unless `forced_too`.
+  void applyDisabled(const QSet<dr_minigame_key_t> &disabled, bool forced_too);
 
   /// Apply the list at `index`, or do nothing for the unsaved slot.
   void onListSelected(int index);
@@ -93,6 +103,10 @@ private:
 
   /* Disabled keys with no leaf here (a game this install has not loaded). */
   QSet<dr_minigame_key_t> m_hidden;
+
+  /* Forced-off games (see setForcedOff), and their leaves' ticks from before. */
+  QSet<dr_guest> m_forced;
+  QHash<dr_minigame_key_t, Qt::CheckState> m_forcedStates;
 
   // Count name/value labels, indexed by dr_minigame_type (unused slots stay null).
   QLabel *m_countNames[DR_MINIGAME_SIZE] = {};

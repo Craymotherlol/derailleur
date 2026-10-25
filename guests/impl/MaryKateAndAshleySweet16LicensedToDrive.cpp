@@ -1,4 +1,5 @@
 #include "MaryKateAndAshleySweet16LicensedToDrive.h"
+#include "DrPaths.h"
 
 #include <QDir>
 #include <QImage>
@@ -221,7 +222,7 @@ static const dr_mp_minigame_t MKA_SWEET16_MINIGAMES[] =
 };
 
 MaryKateAndAshleySweet16LicensedToDrive::MaryKateAndAshleySweet16LicensedToDrive(QObject *parent)
-  : DrGuestGcn("gcn-sweet16", (dr_roms_directory() + "/Mary-Kate and Ashley - Sweet 16 - Licensed to Drive (USA)").toStdString(), parent)
+  : DrGuestGcn("gcn-sweet16", (DrPaths::instance().romsDirectory() + "/Mary-Kate and Ashley - Sweet 16 - Licensed to Drive (USA)").toStdString(), parent)
 {
 }
 

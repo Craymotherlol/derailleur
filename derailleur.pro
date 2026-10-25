@@ -43,9 +43,11 @@ HEADERS += \
 
 SOURCES += \
     DrChallenge.cpp \
-    DrCommon.cpp \
     DrDebug.cpp \
+    DrPaths.cpp \
+    DrRandom.cpp \
     DrSettings.cpp \
+    DrSettingsPage.cpp \
     DrDownloader.cpp \
     DrGuest.cpp \
     DrHost.cpp \
@@ -119,7 +121,10 @@ HEADERS += \
     DrChallenge.h \
     DrCommon.h \
     DrDebug.h \
+    DrPaths.h \
+    DrRandom.h \
     DrSettings.h \
+    DrSettingsPage.h \
     DrDownloader.h \
     DrGuest.h \
     DrGuestList.h \

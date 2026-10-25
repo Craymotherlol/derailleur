@@ -1,4 +1,6 @@
 #include "WiiParty.h"
+#include "DrNetplay.h"
+#include "DrPaths.h"
 
 #include <QRetro.h>
 #include <QStringList>
@@ -224,7 +226,7 @@ static const dr_mp_minigame_t WP_MINIGAMES[] =
 };
 
 WiiParty::WiiParty(QObject *parent)
-  : DrGuestWii("wii-wp", (dr_roms_directory() + "/Wii Party (USA) (En,Fr,Es)").toStdString(), parent)
+  : DrGuestWii("wii-wp", (DrPaths::instance().romsDirectory() + "/Wii Party (USA) (En,Fr,Es)").toStdString(), parent)
 {
 }
 
@@ -508,7 +510,7 @@ void WiiParty::run()
   recolorNewModules(true);
 
   /* Resync peers */
-  if (m_resyncCountdown > 0 && --m_resyncCountdown == 0 && dr_netplay_is_server())
+  if (m_resyncCountdown > 0 && --m_resyncCountdown == 0 && DrNetplay::sessionServer())
     emit hardResync();
 
   if (!m_minigame || m_finishScheduled)
@@ -526,7 +528,7 @@ void WiiParty::run()
       log(DR_LOG_INFO, qPrintable(QString("mini-game module %1 loaded at frame %2")
         .arg(m_minigame->scene_id).arg(m_minigameFrames)));
       applyControlRemap(m_minigame->quirks, m_players);
-      if (dr_netplay_active())
+      if (DrNetplay::sessionActive())
         m_resyncCountdown = 30;
     }
   }

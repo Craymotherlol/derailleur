@@ -1,6 +1,8 @@
 #include "DrStartup.h"
+#include "DrPaths.h"
 #include "DrDownloader.h"
 #include "DrLogger.h"
+#include "DrSettings.h"
 
 #include <QDateTime>
 #include <QDir>
@@ -90,29 +92,29 @@ static void dr_load_paths(DrLogger *logger)
     return s.value(key).toString();
   };
 
-  dr_set_roms_directory(load("paths/roms", cwd.filePath("roms")));
-  dr_set_cores_directory(load("paths/cores", cwd.filePath("cores")));
-  dr_set_state_directory(load("paths/state", cwd.filePath("state")));
-  dr_set_save_directory(load("paths/save", cwd.filePath("save")));
+  DrPaths::instance().setRomsDirectory(load("paths/roms", cwd.filePath("roms")));
+  DrPaths::instance().setCoresDirectory(load("paths/cores", cwd.filePath("cores")));
+  DrPaths::instance().setStateDirectory(load("paths/state", cwd.filePath("state")));
+  DrPaths::instance().setSaveDirectory(load("paths/save", cwd.filePath("save")));
   s.sync();
-  dr_settings_load();
+  DrSettings::instance().load();
 
   dr_log(logger, DR_LOG_INFO, QString("%1 %2").arg(existed ? "loaded" : "created", ini));
-  dr_log(logger, DR_LOG_INFO, QString("paths/roms: %1").arg(dr_roms_directory()));
-  dr_log(logger, DR_LOG_INFO, QString("paths/cores: %1").arg(dr_cores_directory()));
-  dr_log(logger, DR_LOG_INFO, QString("paths/state: %1").arg(dr_state_directory()));
-  dr_log(logger, DR_LOG_INFO, QString("paths/save: %1").arg(dr_save_directory()));
+  dr_log(logger, DR_LOG_INFO, QString("paths/roms: %1").arg(DrPaths::instance().romsDirectory()));
+  dr_log(logger, DR_LOG_INFO, QString("paths/cores: %1").arg(DrPaths::instance().coresDirectory()));
+  dr_log(logger, DR_LOG_INFO, QString("paths/state: %1").arg(DrPaths::instance().stateDirectory()));
+  dr_log(logger, DR_LOG_INFO, QString("paths/save: %1").arg(DrPaths::instance().saveDirectory()));
 
   DrDownloader downloader;
   dr_attach_downloader(&downloader, logger);
-  downloader.runBlocking(s, dr_save_directory(), dr_state_directory());
+  downloader.runBlocking(s, DrPaths::instance().saveDirectory(), DrPaths::instance().stateDirectory());
 }
 
 static void dr_install_textures(DrLogger *logger)
 {
   for (const DrTextureAsset *asset = DR_TEXTURE_ASSETS; asset->dir; asset++)
   {
-    const QString dir = dr_save_directory() + "/User/Load/Textures/" + asset->dir;
+    const QString dir = DrPaths::instance().saveDirectory() + "/User/Load/Textures/" + asset->dir;
     unsigned copied = 0;
 
     if (!QDir().mkpath(dir))
@@ -172,7 +174,7 @@ void dr_redownload_saves(DrLogger *logger)
   DrDownloader downloader;
 
   dr_attach_downloader(&downloader, logger);
-  downloader.downloadSaves(s, dr_save_directory(), dr_state_directory());
+  downloader.downloadSaves(s, DrPaths::instance().saveDirectory(), DrPaths::instance().stateDirectory());
 }
 
 QList<DrCustomRom> dr_custom_roms(void)
@@ -184,7 +186,7 @@ QList<DrCustomRom> dr_custom_roms(void)
     const dr_game game = static_cast<dr_game>(DR_GAME_MARIOPARTY1 + mp - 1);
     const QStringList filters =
       mp <= 3 ? QStringList{ "*.z64" } : QStringList{ "*.rvz", "*.iso" };
-    QDir dir(dr_roms_directory() + QString("/custom/mp%1").arg(mp));
+    QDir dir(DrPaths::instance().romsDirectory() + QString("/custom/mp%1").arg(mp));
 
     if (!dir.exists())
       continue;

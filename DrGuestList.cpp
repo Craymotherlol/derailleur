@@ -1,4 +1,6 @@
 #include "DrGuestList.h"
+#include "DrNetplay.h"
+#include "DrRandom.h"
 
 #include <QWidget>
 
@@ -34,11 +36,14 @@ DrGuest *DrGuestList::pickMinigame(
   };
   QList<EligibleGuest> eligible;
 
-  const bool netplay = dr_netplay_active();
+  const bool netplay = DrNetplay::sessionActive();
 
   for (DrGuest *guest : m_guests)
   {
     QList<const dr_mp_minigame_t *> minigames;
+
+    if (m_excluded.contains(guest->id()))
+      continue;
 
     for (const dr_mp_minigame_t *mg = guest->minigames(); mg && mg->name; mg++)
     {
@@ -57,8 +62,8 @@ DrGuest *DrGuestList::pickMinigame(
     return nullptr;
 
   /* Each game is equally likely, then each of its mini-games */
-  const auto &picked = eligible[dr_rand() % eligible.size()];
-  outMinigame = picked.minigames[dr_rand() % picked.minigames.size()];
+  const auto &picked = eligible[DrRandom::instance().next() % eligible.size()];
+  outMinigame = picked.minigames[DrRandom::instance().next() % picked.minigames.size()];
 
   return picked.guest;
 }
@@ -141,9 +146,16 @@ void DrGuestList::applyFilter(const QByteArray &payload)
   m_rolled = false;
 }
 
+void DrGuestList::setExcludedGuests(const QSet<dr_guest> &guests)
+{
+  m_excluded = guests;
+  log(DR_LOG_INFO, qPrintable(QString("excluded guests: %1").arg(m_excluded.size())));
+  m_rolled = false;
+}
+
 bool DrGuestList::guestHasCandidate(DrGuest *guest) const
 {
-  if (!m_guests.contains(guest))
+  if (!m_guests.contains(guest) || m_excluded.contains(guest->id()))
     return false;
 
   for (const dr_mp_minigame_t *mg = guest->minigames(); mg && mg->name; mg++)

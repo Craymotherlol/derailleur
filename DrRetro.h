@@ -17,7 +17,7 @@ class QWidget;
 /// be held (see dr_wii_control).
 void dr_apply_wii_control(QRetroInputJoypad &jp, dr_wii_control control);
 
-/// Pushes the global, user-facing core options (see dr_settings) into `core`.
+/// Pushes the global, user-facing core options (see DrSettings) into `core`.
 /// Call it once per QRetro, right after it is constructed -- values for options
 /// the core hasn't registered yet are held and applied when it does. Every
 /// setting is written both ways (on *and* off), because a value that lands in
@@ -92,8 +92,8 @@ public:
   /// core isn't in use (not the current context).
   void shutdown();
 
-  /// Loads dr_state_directory()/<name>.state.zip, logs the result, and returns
-  /// whether it loaded.
+  /// Loads <state directory>/<name>.state.zip (see DrPaths), logs the result, and
+  /// returns whether it loaded.
   bool loadState(const char *name);
 
   /// Pushes a mini-game's emulation quirks (see dr_emulation_quirk_t) into the

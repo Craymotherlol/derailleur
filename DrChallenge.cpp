@@ -1,4 +1,5 @@
 #include "DrChallenge.h"
+#include "DrPaths.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -637,7 +638,7 @@ QString DrChallenge::filePathFor(dr_character character)
   for (const QChar &ch : QString::fromUtf8(dr_character_name(character)).toLower())
     if (ch.isLetterOrNumber())
       slug += ch;
-  return dr_save_directory() + "/challenge-" + slug + ".json";
+  return DrPaths::instance().saveDirectory() + "/challenge-" + slug + ".json";
 }
 
 QString DrChallenge::recordKey(const DrGuest *guest, const dr_mp_minigame_t *minigame)
@@ -688,7 +689,7 @@ void DrChallenge::saveFor(dr_character character, const QHash<QString, DrClearSt
     obj.insert(it.key(), entry);
   }
 
-  QDir().mkpath(dr_save_directory());
+  QDir().mkpath(DrPaths::instance().saveDirectory());
   QFile file(filePathFor(character));
   if (file.open(QIODevice::WriteOnly | QIODevice::Truncate))
     file.write(QJsonDocument(obj).toJson(QJsonDocument::Indented));

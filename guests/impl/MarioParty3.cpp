@@ -1,4 +1,5 @@
 #include "MarioParty3.h"
+#include "DrPaths.h"
 
 #include <cstring>
 
@@ -166,7 +167,7 @@ static MpN64Config buildConfig()
   MpN64Config config = {};
 
   config.rom = "Mario Party 3 (USA).z64";
-  config.state = (dr_state_directory() + "/mp3.state.zip").toStdString();
+  config.state = (DrPaths::instance().stateDirectory() + "/mp3.state.zip").toStdString();
 
   config.scene_miniexplain[0] = 0x70;
   config.scene_miniexplain[1] = 0x70;

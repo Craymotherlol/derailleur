@@ -1,4 +1,6 @@
 #include "MarioParty7.h"
+#include "DrRandom.h"
+#include "DrPaths.h"
 
 #include <QRetro.h>
 #include <cstring>
@@ -196,7 +198,7 @@ static MpGcnConfig buildConfig()
 {
   MpGcnConfig config = {};
 
-  config.game = (dr_roms_directory() + "/Mario Party 7 (USA) (Rev 1)").toStdString();
+  config.game = (DrPaths::instance().romsDirectory() + "/Mario Party 7 (USA) (Rev 1)").toStdString();
   config.state = "mp7";
 
   config.scene_miniexplain = 0x06;
@@ -345,7 +347,7 @@ static void mp7_apply_extra_players(DrRetro *retro)
           if (!used[character])
             free_count++;
 
-        pick = static_cast<unsigned>(dr_rand()) % free_count;
+        pick = static_cast<unsigned>(DrRandom::instance().next()) % free_count;
         for (character = 0; character <= MP7_CHARACTER_DRY_BONES; character++)
           if (!used[character] && pick-- == 0)
             break;
