@@ -55,6 +55,11 @@ struct DrGcnHostConfig
   /// and flag them on the roulette instead.
   bool mic_lists;
 
+  /// The board mishandles negative mini-game results, so they are written as 0
+  /// and the coins are taken off by hand once the results screen has applied them
+  /// (MP6 and MP7).
+  bool negative_results_fix;
+
   /// The battle roulette picks from pictures, so they are redrawn as the names of
   /// the candidates on offer. Dolphin loads the replacements out of `dir` under
   /// the save directory. A null `dir` means this game doesn't do that.
@@ -209,6 +214,8 @@ private:
   /// Fill `players` from the four board slots for the active mini-game type.
   void readPlayers(DrPlayerArray &players);
 
+  void applyPendingLoss(void);
+
   int32_t m_PreviousScene = -1;
   std::array<DrMinigameCandidate, 5> m_Candidates = {};
 
@@ -218,6 +225,10 @@ private:
   /// Set when the core loads a state, cleared by run(); written from whichever
   /// thread ran the load, read on the timing thread.
   std::atomic<bool> m_RestampTitles{ false };
+
+  /// Coins each slot still owes from a negative result, see negative_results_fix
+  int m_PendingLoss[4] = { 0, 0, 0, 0 };
+  unsigned m_PendingLossFrames = 0;
 
 protected:
   /// Last chance to change what the guest reported for slot `index` before it is

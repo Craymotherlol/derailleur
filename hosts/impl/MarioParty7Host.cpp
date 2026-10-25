@@ -270,6 +270,8 @@ static DrGcnHostConfig makeConfig(const std::string &game)
    * one ran; candidates follow it so a mic roulette offers only mic games. */
   config.mic_lists = true;
 
+  config.negative_results_fix = true;
+
   config.save_files = { "*-GP7E-MARIPA7.gci" };
 
   return config;

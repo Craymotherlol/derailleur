@@ -11,6 +11,7 @@
 #include "asm/mp4.h"
 
 #include <cstddef>
+#include <cstring>
 
 typedef enum
 {
@@ -30,6 +31,9 @@ typedef enum
 /* The battle roulette picks a mini-game from pictures, so they get redrawn as the
  * names of the candidates on offer (see DrGcnHostConfig::battle_icons). */
 #define MPGC_BATTLE_ICON_SCALE 2
+
+/* Number of frames before running the negative results fix hack */
+#define MPGC_PENDING_LOSS_FRAMES 120
 
 /* Draws `title` centered into an icon-sized image and writes it to `path`. The
  * text wraps, and the font shrinks until every line fits, so nothing is cut off. */
@@ -332,6 +336,16 @@ void MarioPartyGcnHost::run(void)
   m_PreviousScene = current_scene;
 
   applyGameHooks(current_scene);
+
+  /* Apply the negative results hack */
+  if (m_PendingLoss[0] || m_PendingLoss[1] || m_PendingLoss[2] || m_PendingLoss[3])
+  {
+    if (current_scene == m_config.scene_miniresults)
+      m_PendingLossFrames++;
+    if (m_PendingLossFrames >= MPGC_PENDING_LOSS_FRAMES ||
+        (previous_scene == m_config.scene_miniresults && current_scene != previous_scene))
+      applyPendingLoss();
+  }
 
   if (previous_scene != current_scene)
   {
@@ -703,19 +717,63 @@ void MarioPartyGcnHost::writeResults(DrGuest *guest)
     const dr_minigame_result_t result = adjustResult(i, guest->minigameResult(i));
     int64_t chr = 0;
     dr_character character = DR_CHARACTER_INVALID;
+    int coins = result.coins;
+    int bonus_coins = result.bonus_coins;
 
-    m_retro->writeValue(result.coins, m_config.values.result[i]);
-    m_retro->writeValue(result.bonus_coins, m_config.values.bonus_result[i]);
+    /* Flag negative results to fix later */
+    m_PendingLoss[i] = 0;
+    if (m_config.negative_results_fix)
+    {
+      if (coins < 0)
+      {
+        m_PendingLoss[i] -= coins;
+        coins = 0;
+      }
+      if (bonus_coins < 0)
+      {
+        m_PendingLoss[i] -= bonus_coins;
+        bonus_coins = 0;
+      }
+    }
+
+    m_retro->writeValue(coins, m_config.values.result[i]);
+    m_retro->writeValue(bonus_coins, m_config.values.bonus_result[i]);
 
     if (m_config.char_to_dr && m_retro->readValue(&chr, m_config.values.character[i]) == DR_OK)
       character = m_config.char_to_dr(static_cast<unsigned>(chr));
 
     log(DR_LOG_INFO, qPrintable(resultLogLine(i, character, result)));
   }
+
+  m_PendingLossFrames = 0;
+}
+
+/** @todo HACK! Manually remove coins representing a negative minigame result */
+void MarioPartyGcnHost::applyPendingLoss(void)
+{
+  for (unsigned i = 0; i < 4; i++)
+  {
+    int64_t coins = 0;
+
+    if (!m_PendingLoss[i] || !m_config.values.coins[i].address)
+      continue;
+
+    m_retro->readValue(&coins, m_config.values.coins[i]);
+    coins = coins > m_PendingLoss[i] ? coins - m_PendingLoss[i] : 0;
+    m_retro->writeValue(coins, m_config.values.coins[i]);
+    log(DR_LOG_INFO, qPrintable(QString("slot %1: NEGATIVE HACK took %2 coins after results, now %3")
+                                  .arg(i + 1).arg(m_PendingLoss[i]).arg(coins)));
+  }
+
+  memset(m_PendingLoss, 0, sizeof(m_PendingLoss));
+  m_PendingLossFrames = 0;
 }
 
 void MarioPartyGcnHost::clearResults(void)
 {
+  memset(m_PendingLoss, 0, sizeof(m_PendingLoss));
+  m_PendingLossFrames = 0;
+
   for (unsigned i = 0; i < 4; i++)
   {
     m_retro->writeValue(0, m_config.values.result[i]);
