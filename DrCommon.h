@@ -4,7 +4,7 @@
 #include <QFile>
 #include <QString>
 
-static const char *const DERAILLEUR_DATE_STRING = "October 24, 2026";
+static const char *const DERAILLEUR_DATE_STRING = "October 25, 2026";
 static const char *const DERAILLEUR_RELEASE_STRING = "r13";
 
 #define DR_CONTROL_PORT_P1 0
