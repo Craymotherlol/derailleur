@@ -244,7 +244,7 @@ void DonkeyKong64::run(void)
 
 
   int64_t results_screen_is_shown;
-  m_retro->readValue(&results_screen_is_shown, DK64_MINIGAME_HAS_ENDED);
+  m_retro->readValue(&results_screen_is_shown, DK64_MULTI_MINIGAME_HAS_ENDED);
 
   /* When you've determined the mini-game has ended, call `finishMinigame` */
   if (results_screen_is_shown)
